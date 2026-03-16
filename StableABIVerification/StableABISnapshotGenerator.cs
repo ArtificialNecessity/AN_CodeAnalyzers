@@ -9,13 +9,25 @@ using System.Reflection.PortableExecutable;
 namespace AN.CodeAnalyzers.StableABIVerification
 {
     /// <summary>
-    /// Generates a StableABI.snapshot by reading a compiled assembly using
-    /// System.Reflection.Metadata. Extracts ABI-relevant facts: const values,
-    /// enum members, default parameters, struct layouts, P/Invoke signatures.
+    /// Generates a .stableapi snapshot by reading a compiled assembly using
+    /// System.Reflection.Metadata. Extracts the public API surface and ABI-relevant
+    /// facts: type declarations, method signatures, properties, events, fields,
+    /// const values, enum members, default parameters, and struct layouts.
     /// Output is a sorted, deterministic, one-fact-per-line text format.
+    ///
+    /// NOTE: P/Invoke signatures are NOT tracked here. This tool verifies the
+    /// consumed external public API surface. P/Invoke verification (native function
+    /// signatures, DLL bindings) is handled by a separate analyzer.
     /// </summary>
     public static class StableABISnapshotGenerator
     {
+        /// <summary>
+        /// Current snapshot format version.
+        /// Version 1: enums, consts, default params, struct layouts, P/Invoke signatures.
+        /// Version 2: adds type declarations, method signatures, properties, events, public fields.
+        /// </summary>
+        public const int CurrentFormatVersion = 2;
+
         /// <summary>
         /// Generates the full snapshot content from a compiled assembly.
         /// </summary>
@@ -49,7 +61,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
                 string typeDisplayName = buildTypeDisplayName(typeName, typeNamespace, typeDefinition, metadataReader);
 
-                var typeAttributes = typeDefinition.Attributes;
+                // Emit type declaration
+                collectTypeFact(typeDefinition, typeDisplayName, metadataReader, snapshotLines);
 
                 if (isEnum(typeDefinition, metadataReader))
                 {
@@ -59,14 +72,20 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 {
                     collectStructFacts(typeDefinition, typeDisplayName, metadataReader, snapshotLines);
                     collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
                     collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectPInvokeFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
                 }
                 else
                 {
                     collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
                     collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectPInvokeFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
                 }
             }
 
@@ -77,7 +96,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 return "";
             }
 
-            return string.Join("\n", snapshotLines) + "\n";
+            // Prepend version header (not sorted — always first line)
+            return $"__stableApiVersion: {CurrentFormatVersion}\n" + string.Join("\n", snapshotLines) + "\n";
         }
 
         // ──────────────────────────────────────────────
@@ -361,45 +381,6 @@ namespace AN.CodeAnalyzers.StableABIVerification
         }
 
         // ──────────────────────────────────────────────
-        // P/Invoke facts
-        // ──────────────────────────────────────────────
-
-        private static void collectPInvokeFacts(
-            TypeDefinition containingTypeDefinition,
-            string typeDisplayName,
-            string snapshotScope,
-            MetadataReader metadataReader,
-            List<string> snapshotLines)
-        {
-            foreach (var methodHandle in containingTypeDefinition.GetMethods())
-            {
-                var methodDefinition = metadataReader.GetMethodDefinition(methodHandle);
-
-                // Check for PInvokeImpl flag
-                if ((methodDefinition.Attributes & MethodAttributes.PinvokeImpl) == 0)
-                {
-                    continue;
-                }
-
-                if (!methodMatchesScope(methodDefinition, snapshotScope))
-                {
-                    continue;
-                }
-
-                string methodName = metadataReader.GetString(methodDefinition.Name);
-
-                // Decode parameter types from the method signature
-                var signatureDecoder = methodDefinition.DecodeSignature(new SignatureTypeNameProvider(), null);
-                for (int paramIndex = 0; paramIndex < signatureDecoder.ParameterTypes.Length; paramIndex++)
-                {
-                    string paramTypeName = signatureDecoder.ParameterTypes[paramIndex];
-                    snapshotLines.Add(
-                        $"pinvoke.{typeDisplayName}.{methodName}.param{paramIndex}: {paramTypeName}");
-                }
-            }
-        }
-
-        // ──────────────────────────────────────────────
         // Struct facts
         // ──────────────────────────────────────────────
 
@@ -452,6 +433,272 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 snapshotLines.Add(
                     $"struct.{typeDisplayName}.field{fieldOrdinal}.{fieldName}: {fieldTypeName}{offsetSuffix}");
                 fieldOrdinal++;
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // Type declaration fact
+        // ──────────────────────────────────────────────
+
+        private static void collectTypeFact(
+            TypeDefinition typeDefinition,
+            string typeDisplayName,
+            MetadataReader metadataReader,
+            List<string> snapshotLines)
+        {
+            string typeKindLabel;
+            if ((typeDefinition.Attributes & TypeAttributes.Interface) != 0)
+            {
+                typeKindLabel = "interface";
+            }
+            else if (isEnum(typeDefinition, metadataReader))
+            {
+                typeKindLabel = "enum";
+            }
+            else if (isStruct(typeDefinition, metadataReader))
+            {
+                typeKindLabel = "struct";
+            }
+            else if (isDelegate(typeDefinition, metadataReader))
+            {
+                typeKindLabel = "delegate";
+            }
+            else
+            {
+                bool isAbstract = (typeDefinition.Attributes & TypeAttributes.Abstract) != 0;
+                bool isSealed = (typeDefinition.Attributes & TypeAttributes.Sealed) != 0;
+                if (isAbstract && isSealed)
+                {
+                    typeKindLabel = "static class";
+                }
+                else if (isAbstract)
+                {
+                    typeKindLabel = "abstract class";
+                }
+                else if (isSealed)
+                {
+                    typeKindLabel = "sealed class";
+                }
+                else
+                {
+                    typeKindLabel = "class";
+                }
+            }
+
+            snapshotLines.Add($"type.{typeDisplayName}: {typeKindLabel}");
+        }
+
+        private static bool isDelegate(TypeDefinition typeDefinition, MetadataReader metadataReader)
+        {
+            var baseTypeHandle = typeDefinition.BaseType;
+            if (baseTypeHandle.IsNil)
+            {
+                return false;
+            }
+            string baseTypeName = getBaseTypeName(baseTypeHandle, metadataReader);
+            return baseTypeName == "System.MulticastDelegate";
+        }
+
+        // ──────────────────────────────────────────────
+        // Method facts (full signatures)
+        // ──────────────────────────────────────────────
+
+        private static void collectMethodFacts(
+            TypeDefinition containingTypeDefinition,
+            string typeDisplayName,
+            string snapshotScope,
+            MetadataReader metadataReader,
+            List<string> snapshotLines)
+        {
+            foreach (var methodHandle in containingTypeDefinition.GetMethods())
+            {
+                var methodDefinition = metadataReader.GetMethodDefinition(methodHandle);
+
+                if (!methodMatchesScope(methodDefinition, snapshotScope))
+                {
+                    continue;
+                }
+
+                string methodName = metadataReader.GetString(methodDefinition.Name);
+
+                // Skip property/event accessors (they're covered by property/event facts)
+                if (methodName.StartsWith("get_") || methodName.StartsWith("set_")
+                    || methodName.StartsWith("add_") || methodName.StartsWith("remove_"))
+                {
+                    continue;
+                }
+
+                // Skip compiler-generated methods
+                if (methodName == ".cctor")
+                {
+                    continue;
+                }
+
+                var signatureDecoder = methodDefinition.DecodeSignature(new SignatureTypeNameProvider(), null);
+                string returnTypeName = signatureDecoder.ReturnType;
+
+                // Build parameter list with names
+                var parameterNames = new List<string>();
+                foreach (var parameterHandle in methodDefinition.GetParameters())
+                {
+                    var parameterDefinition = metadataReader.GetParameter(parameterHandle);
+                    if (parameterDefinition.SequenceNumber == 0)
+                    {
+                        continue; // skip return value
+                    }
+                    string paramName = metadataReader.GetString(parameterDefinition.Name);
+                    int paramIndex = parameterDefinition.SequenceNumber - 1;
+                    if (paramIndex < signatureDecoder.ParameterTypes.Length)
+                    {
+                        parameterNames.Add($"{signatureDecoder.ParameterTypes[paramIndex]} {paramName}");
+                    }
+                }
+
+                string parameterList = string.Join(", ", parameterNames);
+                string displayMethodName = methodName == ".ctor" ? ".ctor" : methodName;
+
+                snapshotLines.Add($"method.{typeDisplayName}.{displayMethodName}: {returnTypeName}({parameterList})");
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // Property facts
+        // ──────────────────────────────────────────────
+
+        private static void collectPropertyFacts(
+            TypeDefinition containingTypeDefinition,
+            string typeDisplayName,
+            string snapshotScope,
+            MetadataReader metadataReader,
+            List<string> snapshotLines)
+        {
+            foreach (var propertyHandle in containingTypeDefinition.GetProperties())
+            {
+                var propertyDefinition = metadataReader.GetPropertyDefinition(propertyHandle);
+                string propertyName = metadataReader.GetString(propertyDefinition.Name);
+
+                var propertySignature = propertyDefinition.DecodeSignature(new SignatureTypeNameProvider(), null);
+                string propertyTypeName = propertySignature.ReturnType;
+
+                var accessors = propertyDefinition.GetAccessors();
+                bool hasGetter = !accessors.Getter.IsNil;
+                bool hasSetter = !accessors.Setter.IsNil;
+
+                // Check if at least one accessor is in scope
+                bool getterInScope = hasGetter && methodMatchesScope(metadataReader.GetMethodDefinition(accessors.Getter), snapshotScope);
+                bool setterInScope = hasSetter && methodMatchesScope(metadataReader.GetMethodDefinition(accessors.Setter), snapshotScope);
+
+                if (!getterInScope && !setterInScope)
+                {
+                    continue;
+                }
+
+                string accessorDescription;
+                if (getterInScope && setterInScope)
+                {
+                    accessorDescription = "{ get; set; }";
+                }
+                else if (getterInScope)
+                {
+                    accessorDescription = "{ get; }";
+                }
+                else
+                {
+                    accessorDescription = "{ set; }";
+                }
+
+                snapshotLines.Add($"property.{typeDisplayName}.{propertyName}: {propertyTypeName} {accessorDescription}");
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // Event facts
+        // ──────────────────────────────────────────────
+
+        private static void collectEventFacts(
+            TypeDefinition containingTypeDefinition,
+            string typeDisplayName,
+            string snapshotScope,
+            MetadataReader metadataReader,
+            List<string> snapshotLines)
+        {
+            foreach (var eventHandle in containingTypeDefinition.GetEvents())
+            {
+                var eventDefinition = metadataReader.GetEventDefinition(eventHandle);
+                string eventName = metadataReader.GetString(eventDefinition.Name);
+
+                var eventAccessors = eventDefinition.GetAccessors();
+                bool adderInScope = !eventAccessors.Adder.IsNil
+                    && methodMatchesScope(metadataReader.GetMethodDefinition(eventAccessors.Adder), snapshotScope);
+
+                if (!adderInScope)
+                {
+                    continue;
+                }
+
+                // Decode event type from the adder's parameter
+                string eventTypeName = "?";
+                if (!eventAccessors.Adder.IsNil)
+                {
+                    var adderMethod = metadataReader.GetMethodDefinition(eventAccessors.Adder);
+                    var adderSignature = adderMethod.DecodeSignature(new SignatureTypeNameProvider(), null);
+                    if (adderSignature.ParameterTypes.Length > 0)
+                    {
+                        eventTypeName = adderSignature.ParameterTypes[0];
+                    }
+                }
+
+                snapshotLines.Add($"event.{typeDisplayName}.{eventName}: {eventTypeName}");
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // Public field facts (non-const, non-struct-instance)
+        // ──────────────────────────────────────────────
+
+        private static void collectFieldFacts(
+            TypeDefinition containingTypeDefinition,
+            string typeDisplayName,
+            string snapshotScope,
+            MetadataReader metadataReader,
+            List<string> snapshotLines)
+        {
+            foreach (var fieldHandle in containingTypeDefinition.GetFields())
+            {
+                var fieldDefinition = metadataReader.GetFieldDefinition(fieldHandle);
+
+                // Skip const fields (handled by collectConstFacts)
+                if ((fieldDefinition.Attributes & FieldAttributes.Literal) != 0)
+                {
+                    continue;
+                }
+
+                if (!fieldMatchesScope(fieldDefinition, snapshotScope))
+                {
+                    continue;
+                }
+
+                string fieldName = metadataReader.GetString(fieldDefinition.Name);
+                string fieldTypeName = decodeFieldTypeName(fieldDefinition, metadataReader);
+
+                bool isStatic = (fieldDefinition.Attributes & FieldAttributes.Static) != 0;
+                bool isReadonly = (fieldDefinition.Attributes & FieldAttributes.InitOnly) != 0;
+
+                string modifiers = "";
+                if (isStatic && isReadonly)
+                {
+                    modifiers = "static readonly ";
+                }
+                else if (isStatic)
+                {
+                    modifiers = "static ";
+                }
+                else if (isReadonly)
+                {
+                    modifiers = "readonly ";
+                }
+
+                snapshotLines.Add($"field.{typeDisplayName}.{fieldName}: {modifiers}{fieldTypeName}");
             }
         }
 

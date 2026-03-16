@@ -61,6 +61,22 @@ namespace AN.CodeAnalyzers.StableABIVerification
             return true;
         }
 
+        private static int parseSnapshotVersion(string snapshotContent)
+        {
+            // Look for __stableApiVersion: N as the first line
+            foreach (string rawLine in snapshotContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)) {
+                string trimmedLine = rawLine.Trim();
+                if (trimmedLine.StartsWith("__stableApiVersion: ")) {
+                    string versionString = trimmedLine.Substring("__stableApiVersion: ".Length);
+                    if (int.TryParse(versionString, out int parsedVersion)) {
+                        return parsedVersion;
+                    }
+                }
+                break; // only check first non-empty line
+            }
+            return 1; // no version header = version 1
+        }
+
         private bool executeVerifyMode(string currentSnapshotContent)
         {
             if (!File.Exists(SnapshotPath))
@@ -73,6 +89,16 @@ namespace AN.CodeAnalyzers.StableABIVerification
             }
 
             string committedSnapshotContent = File.ReadAllText(SnapshotPath);
+
+            // Check version compatibility
+            int committedVersion = parseSnapshotVersion(committedSnapshotContent);
+            if (committedVersion < StableABISnapshotGenerator.CurrentFormatVersion) {
+                Log.LogWarning(
+                    "StableABI: Snapshot at '{0}' is format version {1}, current is {2}. " +
+                    "Type/method/property/event/field changes are NOT being verified. " +
+                    "Run 'dotnet build /p:UpdateStableABI=true' to upgrade.",
+                    SnapshotPath, committedVersion, StableABISnapshotGenerator.CurrentFormatVersion);
+            }
 
             if (committedSnapshotContent == currentSnapshotContent)
             {
