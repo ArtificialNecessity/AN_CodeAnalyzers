@@ -1,5 +1,9 @@
 # AN.CodeAnalyzers
 
+(C)opyright 2026 by David Jeske
+Licensed under the Apache License, Version 2.0
+
+
 Roslyn code analyzers for preventing silent binary compatibility breaks in C# projects.
 
 ## Installation
@@ -54,12 +58,12 @@ Prevents silent binary compatibility breaks caused by enum members without expli
 </PropertyGroup>
 ```
 
-| Value      | Behavior |
-|------------|----------|
-| `public`   | Only public enums (default) |
-| `all`      | All enums regardless of visibility |
+| Value        | Behavior                                                  |
+| ------------ | --------------------------------------------------------- |
+| `public`   | Only public enums (default)                               |
+| `all`      | All enums regardless of visibility                        |
 | `explicit` | Only enums decorated with `[RequireExplicitEnumValues]` |
-| `none`     | Disabled |
+| `none`     | Disabled                                                  |
 
 **Per-enum opt-out:**
 
@@ -102,3 +106,4 @@ If you want to redirect build output locally, create a `Directory.Build.props` a
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
   </PropertyGroup>
 </Project>
+```
