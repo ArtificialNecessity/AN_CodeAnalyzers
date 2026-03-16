@@ -7,21 +7,31 @@
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
-       StableABI Snapshot Verification (MSBuild Task)
+       StableABI Snapshot Verification (MSBuild Task - Out-of-Process)
 
-       Normal build:   dotnet build                        → verifies snapshot
+       TaskHostFactory runs the task in a separate process, avoiding DLL locking.
+       This allows rebuilding StableABIVerification without shutting down MSBuild.
+
+       Normal build:    dotnet build                        → verifies snapshot
        Update snapshot: dotnet build /p:UpdateStableABI=true → generates snapshot
        ════════════════════════════════════════════════════════════════ -->
 
-  <!-- During NuGet package consumption, the DLL is at tasks/netstandard2.0/ relative to build/.
-       During development, it's at StableABIVerification/bin/ relative to the repo root. -->
+  <!-- TaskHostFactory runs the task in a separate MSBuild.exe process.
+       This prevents DLL locking — you can rebuild StableABIVerification.dll
+       and it will be picked up on the next build without needing to shut down
+       the MSBuild server. Without TaskHostFactory, MSBuild loads the DLL into
+       its own process and locks it until shutdown. -->
   <UsingTask
     TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
     AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll"
+    TaskFactory="TaskHostFactory"
     Condition="Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
+  
+  <!-- Fallback for local development (load from bin directory) -->
   <UsingTask
     TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
     AssemblyFile="$(MSBuildThisFileDirectory)..\StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll"
+    TaskFactory="TaskHostFactory"
     Condition="!Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
 
   <!-- Snapshot filename: $(AssemblyName).stableapi next to the .csproj -->
@@ -29,10 +39,11 @@
     <StableABISnapshotPath Condition="'$(StableABISnapshotPath)' == ''">$(MSBuildProjectDirectory)\$(AssemblyName).stableapi</StableABISnapshotPath>
   </PropertyGroup>
 
-  <!-- Verify snapshot after every build (skip when UpdateStableABI=true) -->
+  <!-- Verify snapshot after every build (skip when UpdateStableABI=true)
+       Only runs when ANDevMode environment variable is set (for development of this analyzer package itself) -->
   <Target Name="VerifyStableABI"
           AfterTargets="Build"
-          Condition="'$(StableABISnapshotScope)' != '' AND '$(StableABISnapshotScope)' != 'none' AND '$(UpdateStableABI)' != 'true'">
+          Condition="'$(StableABISnapshotScope)' != '' AND '$(StableABISnapshotScope)' != 'none' AND '$(UpdateStableABI)' != 'true' AND '$(ANDevMode)' != ''">
     <StableABIVerifyTask
       AssemblyPath="$(TargetPath)"
       SnapshotPath="$(StableABISnapshotPath)"

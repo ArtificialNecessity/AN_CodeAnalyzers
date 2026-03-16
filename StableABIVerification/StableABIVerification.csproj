@@ -5,6 +5,10 @@
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**</DefaultItemExcludes>
+    
+    <!-- Support both MSBuild task and console executable -->
+    <OutputType>Exe</OutputType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
