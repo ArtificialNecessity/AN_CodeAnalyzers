@@ -1,0 +1,8 @@
+<Project>
+
+  <!-- Make EnforceExplicitEnumValues visible to the Roslyn analyzer at compile time -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
+  </ItemGroup>
+
+</Project>
