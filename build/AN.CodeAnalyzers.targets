@@ -8,32 +8,48 @@
 
   <!-- ════════════════════════════════════════════════════════════════
        StableABI Snapshot Verification (MSBuild Task)
+
+       Normal build:   dotnet build                        → verifies snapshot
+       Update snapshot: dotnet build /p:UpdateStableABI=true → generates snapshot
        ════════════════════════════════════════════════════════════════ -->
 
+  <!-- During NuGet package consumption, the DLL is at tasks/netstandard2.0/ relative to build/.
+       During development, it's at StableABIVerification/bin/ relative to the repo root. -->
   <UsingTask
     TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll"
+    Condition="Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll"
+    Condition="!Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
 
-  <!-- Verify snapshot after every build (only when StableABISnapshotScope is set) -->
+  <!-- Snapshot filename: $(AssemblyName).stableapi next to the .csproj -->
+  <PropertyGroup>
+    <StableABISnapshotPath Condition="'$(StableABISnapshotPath)' == ''">$(MSBuildProjectDirectory)\$(AssemblyName).stableapi</StableABISnapshotPath>
+  </PropertyGroup>
+
+  <!-- Verify snapshot after every build (skip when UpdateStableABI=true) -->
   <Target Name="VerifyStableABI"
           AfterTargets="Build"
-          Condition="'$(StableABISnapshotScope)' != '' AND '$(StableABISnapshotScope)' != 'none'">
+          Condition="'$(StableABISnapshotScope)' != '' AND '$(StableABISnapshotScope)' != 'none' AND '$(UpdateStableABI)' != 'true'">
     <StableABIVerifyTask
       AssemblyPath="$(TargetPath)"
-      SnapshotPath="$(MSBuildProjectDirectory)\StableABI.snapshot"
+      SnapshotPath="$(StableABISnapshotPath)"
       Scope="$(StableABISnapshotScope)"
       GenerateMode="false" />
   </Target>
 
-  <!-- Generate/update snapshot: dotnet msbuild -t:UpdateStableABISnapshot -->
-  <Target Name="UpdateStableABISnapshot"
-          DependsOnTargets="Build">
+  <!-- Generate/update snapshot when UpdateStableABI=true -->
+  <Target Name="GenerateStableABISnapshot"
+          AfterTargets="Build"
+          Condition="'$(UpdateStableABI)' == 'true'">
     <PropertyGroup>
       <StableABISnapshotScope Condition="'$(StableABISnapshotScope)' == '' OR '$(StableABISnapshotScope)' == 'none'">public</StableABISnapshotScope>
     </PropertyGroup>
     <StableABIVerifyTask
       AssemblyPath="$(TargetPath)"
-      SnapshotPath="$(MSBuildProjectDirectory)\StableABI.snapshot"
+      SnapshotPath="$(StableABISnapshotPath)"
       Scope="$(StableABISnapshotScope)"
       GenerateMode="true" />
   </Target>

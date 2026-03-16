@@ -65,11 +65,11 @@ namespace AN.CodeAnalyzers.StableABIVerification
         {
             if (!File.Exists(SnapshotPath))
             {
-                // No committed snapshot — nothing to verify.
-                // User needs to run UpdateStableABISnapshot first.
-                Log.LogMessage(MessageImportance.Normal,
-                    "StableABI: No snapshot file found. Run 'dotnet msbuild -t:UpdateStableABISnapshot' to generate one.");
-                return true;
+                Log.LogError(
+                    "StableABI: No snapshot file found at '{0}'. " +
+                    "Run 'dotnet build /p:UpdateStableABI=true' to generate one.",
+                    SnapshotPath);
+                return false;
             }
 
             string committedSnapshotContent = File.ReadAllText(SnapshotPath);
@@ -111,7 +111,7 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
             Log.LogError(
                 $"StableABI snapshot mismatch: {totalChanges} change(s) detected. " +
-                $"To accept: dotnet msbuild -t:UpdateStableABISnapshot");
+                $"To accept: dotnet build /p:UpdateStableABI=true");
 
             foreach (string changedKey in changedKeys)
             {
