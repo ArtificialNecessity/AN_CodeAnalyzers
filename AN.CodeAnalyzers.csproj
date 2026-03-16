@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsRoslynComponent>true</IsRoslynComponent>
-    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**</DefaultItemExcludes>
 
     <!-- Package properties -->
     <PackageId>AN.CodeAnalyzers</PackageId>
@@ -24,8 +24,11 @@
   <ItemGroup>
     <!-- Pack the analyzer DLL in the analyzers/dotnet/cs directory -->
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <!-- Pack the .targets file so consuming projects get CompilerVisibleProperty automatically -->
+    <!-- Pack the .targets file so consuming projects get MSBuild targets automatically -->
     <None Include="build\AN.CodeAnalyzers.targets" Pack="true" PackagePath="build" Visible="false" />
+    <!-- Pack the StableABI MSBuild task DLL in the tasks/ directory -->
+    <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
+    <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll')" />
   </ItemGroup>
 
 </Project>

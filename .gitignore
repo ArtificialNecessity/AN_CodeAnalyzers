@@ -2,9 +2,13 @@
 bin/
 obj/
 
+# Environment Keys
+*.env
+
 # NuGet
 *.nupkg
 *.snupkg
+
 
 # User-specific files
 *.user

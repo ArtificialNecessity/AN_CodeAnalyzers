@@ -32,16 +32,19 @@ Essential for AI-assisted development, where an AI will confidently insert enum 
 ```
 
 Values:
+
 - `public` — only public enums (default if property present with no value)
 - `all` — all enums regardless of visibility
 - `none` or absent — disabled
 
 **Diagnostic:**
+
 - ID: `AN0001`
 - Severity: Error
 - Message: `Enum member '{0}.{1}' must have an explicit value assignment`
 
 **Per-enum opt-out:**
+
 ```csharp
 [SuppressExplicitEnumValues]
 internal enum ThrowawayState { A, B, C }
@@ -137,6 +140,7 @@ struct.VertexPosition.field1.Color: RgbaFloat @12
 - If committed snapshot exists and differs: **build error** listing each changed line.
 
 The developer must then either:
+
 1. Fix the unintended change, or
 2. Regenerate the snapshot (explicit `dotnet stableabi-accept` or delete + rebuild) to acknowledge the intentional ABI change
 
@@ -159,12 +163,14 @@ AN_CodeAnalyzers/    <-- repo root
 │   └── ExplicitEnumValuesAnalyzer.cs       (AN0001)
 │   └── SuppressExplicitEnumValuesAttribute.cs
 │   └── Tests/
-├── StableABIVerification/
+├── StableABIVerification/is 
 │   ├── PublicConstAnalyzer.cs              (AN0002)
-│   ├── PInvokeMarshalAsAnalyzer.cs         (AN0005)
 │   ├── StableABISnapshotGenerator.cs       (post-compile snapshot generation)
 │   └── StableABISnapshotVerifier.cs        (diff against committed snapshot)
 │   └── Tests/
+├── PInvokeVerification/ (AN0005)
+│   ├── PInvokeSnapshotGenerator.cs       (post-compile snapshot generation)
+│   └── PInvokeSnapshotVerifier.cs        (diff against committed snapshot)
 ├── build/
     └── AN.CodeAnalyzers.targets
 ```

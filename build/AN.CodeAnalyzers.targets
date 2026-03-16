@@ -1,8 +1,41 @@
 <Project>
 
-  <!-- Make EnforceExplicitEnumValues visible to the Roslyn analyzer at compile time -->
+  <!-- Make MSBuild properties visible to Roslyn analyzers at compile time -->
   <ItemGroup>
+    <!-- ExplicitEnums (AN0001) -->
     <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
   </ItemGroup>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       StableABI Snapshot Verification (MSBuild Task)
+       ════════════════════════════════════════════════════════════════ -->
+
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll" />
+
+  <!-- Verify snapshot after every build (only when StableABISnapshotScope is set) -->
+  <Target Name="VerifyStableABI"
+          AfterTargets="Build"
+          Condition="'$(StableABISnapshotScope)' != '' AND '$(StableABISnapshotScope)' != 'none'">
+    <StableABIVerifyTask
+      AssemblyPath="$(TargetPath)"
+      SnapshotPath="$(MSBuildProjectDirectory)\StableABI.snapshot"
+      Scope="$(StableABISnapshotScope)"
+      GenerateMode="false" />
+  </Target>
+
+  <!-- Generate/update snapshot: dotnet msbuild -t:UpdateStableABISnapshot -->
+  <Target Name="UpdateStableABISnapshot"
+          DependsOnTargets="Build">
+    <PropertyGroup>
+      <StableABISnapshotScope Condition="'$(StableABISnapshotScope)' == '' OR '$(StableABISnapshotScope)' == 'none'">public</StableABISnapshotScope>
+    </PropertyGroup>
+    <StableABIVerifyTask
+      AssemblyPath="$(TargetPath)"
+      SnapshotPath="$(MSBuildProjectDirectory)\StableABI.snapshot"
+      Scope="$(StableABISnapshotScope)"
+      GenerateMode="true" />
+  </Target>
 
 </Project>

@@ -3,8 +3,19 @@
 (C)opyright 2026 by David Jeske
 Licensed under the Apache License, Version 2.0
 
-
 Roslyn code analyzers for preventing silent binary compatibility breaks in C# projects.
+
+## Analyzer Summary
+
+| Verifier                        | Rule   | Description                                                                                       |
+| ------------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values. |
+| **StableABIVerification** | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with [PermanentConst]. |
+|                                 | AN0010 | Snapshot mismatch summary — reports count of added/removed/changed ABI entries.                  |
+|                                 | AN0011 | Individual ABI entry added (not in committed snapshot).                                           |
+|                                 | AN0012 | Individual ABI entry removed (was in committed snapshot).                                         |
+
+**StableABIVerification** is a more thorough replacement for `Microsoft.CodeAnalysis.PublicApiAnalyzers`. Instead of tracking API surface names, it tracks the actual binary-level values the compiler bakes into callers: const values, default parameters, enum members, struct field layouts, and P/Invoke signatures.
 
 ## Installation
 
@@ -26,15 +37,14 @@ AN_CodeAnalyzers/
 │   ├── RequireExplicitEnumValuesAttribute.cs
 │   ├── SuppressExplicitEnumValuesAttribute.cs
 │   └── Tests/
-│       ├── AN.CodeAnalyzers.ExplicitEnums.Tests.csproj
-│       ├── AnalyzerVerifierHelper.cs
-│       └── ExplicitEnumValuesAnalyzerTests.cs
-├── StableABIVerification/                  (planned)
+├── StableABIVerification/
+│   ├── PublicConstAnalyzer.cs              (AN0002)
+│   ├── StableABISnapshotGenerator.cs       (snapshot generation from Compilation)
+│   ├── StableABISnapshotVerifier.cs        (AN0010–12, diff against committed snapshot)
 │   └── Tests/
 ├── build/
-│   └── AN.CodeAnalyzers.targets            (planned)
+│   └── AN.CodeAnalyzers.targets
 └── _SPECS/
-    └── 10_IMPL_StableABIVerification.md
 ```
 
 ### Layout conventions
@@ -78,6 +88,37 @@ internal enum ThrowawayState { A, B, C }
 [RequireExplicitEnumValues]
 internal enum ImportantState { Ready = 0, Running = 1, Done = 2 }
 ```
+
+### AN0002: Public const warning
+
+A **warning** (not error) that fires on `public const` fields in public types. The C# compiler inlines const values into the caller's assembly, so changing a const value in a library silently breaks consumers unless they recompile. Suppress via `[SuppressMessage]` or `.editorconfig` for values that genuinely never change (e.g. `Math.PI`).
+
+### AN0010–12: StableABI Snapshot Verification
+
+Maintains a `StableABI.snapshot` file that records every binary-level value the compiler bakes into callers. On each build, the current compilation is compared against the committed snapshot — any difference is a build error.
+
+**Configuration** via MSBuild properties:
+
+```xml
+<PropertyGroup>
+  <GenerateStableABISnapshot>true</GenerateStableABISnapshot>
+  <StableABISnapshotScope>public</StableABISnapshotScope>  <!-- public | all -->
+</PropertyGroup>
+```
+
+**What the snapshot tracks:**
+- Enum member values and underlying types
+- `const` field values
+- Default parameter values
+- Struct field order and layout (`Sequential`/`Explicit`)
+- P/Invoke parameter types
+
+**Workflow:**
+1. Enable snapshot generation in your `.csproj`
+2. Build — `StableABI.snapshot` is generated next to the `.csproj`
+3. Commit the snapshot to source control
+4. On subsequent builds, any ABI change produces a build error listing each difference
+5. To accept an intentional change: delete the snapshot and rebuild
 
 ## Building
 
