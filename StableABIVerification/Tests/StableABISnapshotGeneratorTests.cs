@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Build.Framework;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
@@ -273,6 +275,196 @@ internal class Hidden { }
                 return "";
             }
             return string.Join("\n", snapshotLines) + "\n";
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    // Line ending detection and generation tests
+    // ──────────────────────────────────────────────
+
+    public class StableABILineEndingTests : IDisposable
+    {
+        private readonly string testOutputDirectory;
+
+        public StableABILineEndingTests()
+        {
+            testOutputDirectory = Path.Combine(Path.GetTempPath(), "AN_StableABI_LineEnding_Tests_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(testOutputDirectory);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(testOutputDirectory)) {
+                Directory.Delete(testOutputDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void DetectLineEnding_CRLFContent_ReturnsCRLF()
+        {
+            string crlfContent = "line1\r\nline2\r\nline3\r\n";
+            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(crlfContent);
+            Assert.Equal("\r\n", detectedEnding);
+        }
+
+        [Fact]
+        public void DetectLineEnding_LFContent_ReturnsLF()
+        {
+            string lfContent = "line1\nline2\nline3\n";
+            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(lfContent);
+            Assert.Equal("\n", detectedEnding);
+        }
+
+        [Fact]
+        public void DetectLineEnding_NoNewlines_ReturnsNull()
+        {
+            string noNewlineContent = "single line no ending";
+            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(noNewlineContent);
+            Assert.Null(detectedEnding);
+        }
+
+        [Fact]
+        public void GenerateMode_ExistingLFFile_PreservesLF()
+        {
+            // Arrange: create an existing snapshot file with LF endings
+            string snapshotFilePath = Path.Combine(testOutputDirectory, "test.stableapi");
+            File.WriteAllText(snapshotFilePath, "__stableApiVersion: 2\nenum.Foo.A: 1\n");
+
+            // Compile a test assembly
+            string assemblyFilePath = compileTestAssembly(@"
+public enum Foo { A = 1, B = 2 }
+");
+
+            var fakeBuildEngine = new FakeBuildEngine();
+            var generateTask = new StableABIVerifyTask {
+                AssemblyPath = assemblyFilePath,
+                SnapshotPath = snapshotFilePath,
+                Scope = "public",
+                GenerateMode = true,
+                BuildEngine = fakeBuildEngine
+            };
+
+            // Act
+            bool taskSucceeded = generateTask.Execute();
+
+            // Assert
+            Assert.True(taskSucceeded);
+            string writtenContent = File.ReadAllText(snapshotFilePath);
+            // Must contain LF but NOT CRLF
+            Assert.Contains("\n", writtenContent);
+            Assert.DoesNotContain("\r\n", writtenContent);
+        }
+
+        [Fact]
+        public void GenerateMode_ExistingCRLFFile_PreservesCRLF()
+        {
+            // Arrange: create an existing snapshot file with CRLF endings
+            string snapshotFilePath = Path.Combine(testOutputDirectory, "test.stableapi");
+            File.WriteAllText(snapshotFilePath, "__stableApiVersion: 2\r\nenum.Foo.A: 1\r\n");
+
+            // Compile a test assembly
+            string assemblyFilePath = compileTestAssembly(@"
+public enum Foo { A = 1, B = 2 }
+");
+
+            var fakeBuildEngine = new FakeBuildEngine();
+            var generateTask = new StableABIVerifyTask {
+                AssemblyPath = assemblyFilePath,
+                SnapshotPath = snapshotFilePath,
+                Scope = "public",
+                GenerateMode = true,
+                BuildEngine = fakeBuildEngine
+            };
+
+            // Act
+            bool taskSucceeded = generateTask.Execute();
+
+            // Assert
+            Assert.True(taskSucceeded);
+            string writtenContent = File.ReadAllText(snapshotFilePath);
+            // Must contain CRLF
+            Assert.Contains("\r\n", writtenContent);
+            // Every \n must be preceded by \r (no bare LF)
+            for (int charIndex = 0; charIndex < writtenContent.Length; charIndex++) {
+                if (writtenContent[charIndex] == '\n') {
+                    Assert.True(charIndex > 0 && writtenContent[charIndex - 1] == '\r',
+                        $"Found bare LF at position {charIndex} — expected CRLF");
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // Helper: compile source to DLL
+        // ──────────────────────────────────────────────
+
+        private string compileTestAssembly(string sourceCode)
+        {
+            string assemblyFileName = "TestAssembly_" + Guid.NewGuid().ToString("N") + ".dll";
+            string assemblyFilePath = Path.Combine(testOutputDirectory, assemblyFileName);
+
+            var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode);
+            string coreLibPath = typeof(object).Assembly.Location;
+            string runtimeDirectory = Path.GetDirectoryName(coreLibPath)!;
+
+            var references = new MetadataReference[]
+            {
+                MetadataReference.CreateFromFile(coreLibPath),
+                MetadataReference.CreateFromFile(Path.Combine(runtimeDirectory, "System.Runtime.dll")),
+            };
+
+            var compilation = CSharpCompilation.Create(
+                "TestAssembly",
+                new[] { syntaxTree },
+                references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+            var emitResult = compilation.Emit(assemblyFilePath);
+            if (!emitResult.Success) {
+                throw new Exception("Test compilation failed: " + string.Join("\n",
+                    emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+            }
+
+            return assemblyFilePath;
+        }
+    }
+
+    /// <summary>
+    /// Fake IBuildEngine for testing MSBuild tasks.
+    /// </summary>
+    internal class FakeBuildEngine : IBuildEngine
+    {
+        public System.Collections.Generic.List<string> LoggedErrors { get; } = new System.Collections.Generic.List<string>();
+        public System.Collections.Generic.List<string> LoggedWarnings { get; } = new System.Collections.Generic.List<string>();
+        public System.Collections.Generic.List<string> LoggedMessages { get; } = new System.Collections.Generic.List<string>();
+
+        public bool ContinueOnError => false;
+        public int LineNumberOfTaskNode => 0;
+        public int ColumnNumberOfTaskNode => 0;
+        public string ProjectFileOfTaskNode => "";
+
+        public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void LogCustomEvent(CustomBuildEventArgs e)
+        {
+            LoggedMessages.Add(e.Message ?? "");
+        }
+
+        public void LogErrorEvent(BuildErrorEventArgs e)
+        {
+            LoggedErrors.Add(e.Message ?? "");
+        }
+
+        public void LogMessageEvent(BuildMessageEventArgs e)
+        {
+            LoggedMessages.Add(e.Message ?? "");
+        }
+
+        public void LogWarningEvent(BuildWarningEventArgs e)
+        {
+            LoggedWarnings.Add(e.Message ?? "");
         }
     }
 }

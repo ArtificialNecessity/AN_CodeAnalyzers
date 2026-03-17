@@ -168,7 +168,7 @@ namespace AN.CodeAnalyzers.StableABIVerification
         /// Detects line ending from file content by looking for the first newline.
         /// Returns "\r\n" if CRLF found, "\n" if LF found, null if no newlines.
         /// </summary>
-        internal static string? detectLineEndingFromContent(string fileContent)
+        public static string? detectLineEndingFromContent(string fileContent)
         {
             int lfIndex = fileContent.IndexOf('\n');
             if (lfIndex < 0) {
