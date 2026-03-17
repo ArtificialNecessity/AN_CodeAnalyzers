@@ -49,6 +49,13 @@
     <!-- Pack the JsonPeek MSBuild task DLL in the tasks/ directory -->
     <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll')" />
+    <!-- Pack the JsonPeek CLI tool (net8.0 framework-dependent exe) in the tools/ directory -->
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.deps.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeekTask.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\Hjson.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
@@ -71,8 +78,8 @@
           Condition="'$(NewRelease)' != 'true'">
 
     <!-- 1. Build the JsonPeek CLI tool so we can read version.json -->
-    <MSBuild Projects="CoreTools\CoreTools.csproj" Properties="Configuration=$(Configuration)" />
-    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\CoreTools.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
 
     <!-- 2. Read base version + buildNumberOffset from version.json -->
     <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildProjectDirectory)\version.json&quot; version"
@@ -119,8 +126,8 @@
           Condition="'$(NewRelease)' == 'true'">
 
     <!-- 1. Build the JsonPeek CLI tool so we can read + write version.json -->
-    <MSBuild Projects="CoreTools\CoreTools.csproj" Properties="Configuration=$(Configuration)" />
-    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\CoreTools.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
 
     <!-- 2. Read base version from version.json -->
     <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildProjectDirectory)\version.json&quot; version"
