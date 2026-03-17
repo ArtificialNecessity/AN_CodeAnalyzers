@@ -39,14 +39,16 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         public override bool Execute()
         {
-            if (!File.Exists(AssemblyPath)) {
+            if (!File.Exists(AssemblyPath))
+            {
                 Log.LogError($"StableABI: Assembly not found at '{AssemblyPath}'. Build must complete before snapshot verification.");
                 return false;
             }
 
             List<string> currentSnapshotLines = StableABISnapshotGenerator.GenerateSnapshotLines(AssemblyPath, Scope);
 
-            if (GenerateMode) {
+            if (GenerateMode)
+            {
                 return executeGenerateMode(currentSnapshotLines);
             }
 
@@ -61,7 +63,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
         {
             string lineEnding = detectLineEnding(SnapshotPath);
             string snapshotFileContent = joinLinesWithEnding(currentSnapshotLines, lineEnding);
-            File.WriteAllText(SnapshotPath, snapshotFileContent);
+            byte[] snapshotFileBytes = System.Text.Encoding.UTF8.GetBytes(snapshotFileContent);
+            File.WriteAllBytes(SnapshotPath, snapshotFileBytes);
             Log.LogMessage(MessageImportance.High,
                 $"StableABI: Snapshot written to {SnapshotPath} (line ending: {(lineEnding == "\r\n" ? "CRLF" : "LF")})");
             return true;
@@ -73,7 +76,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         private bool executeVerifyMode(List<string> currentSnapshotLines)
         {
-            if (!File.Exists(SnapshotPath)) {
+            if (!File.Exists(SnapshotPath))
+            {
                 Log.LogError(
                     "StableABI: No snapshot file found at '{0}'. " +
                     "Run 'dotnet build /p:UpdateStableABI=true' to generate one.",
@@ -85,7 +89,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
             // Check version compatibility
             int committedVersion = parseSnapshotVersion(committedSnapshotLines);
-            if (committedVersion < StableABISnapshotGenerator.CurrentFormatVersion) {
+            if (committedVersion < StableABISnapshotGenerator.CurrentFormatVersion)
+            {
                 Log.LogWarning(
                     "StableABI: Snapshot at '{0}' is format version {1}, current is {2}. " +
                     "Type/method/property/event/field changes are NOT being verified. " +
@@ -94,7 +99,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
             }
 
             // Compare as line lists (line-ending agnostic)
-            if (linesAreEqual(committedSnapshotLines, currentSnapshotLines)) {
+            if (linesAreEqual(committedSnapshotLines, currentSnapshotLines))
+            {
                 return true; // Match — silent success
             }
 
@@ -106,16 +112,22 @@ namespace AN.CodeAnalyzers.StableABIVerification
             var removedKeys = new List<string>();
             var changedKeys = new List<string>();
 
-            foreach (var committedEntry in committedEntries) {
-                if (!currentEntries.TryGetValue(committedEntry.Key, out string? currentValue)) {
+            foreach (var committedEntry in committedEntries)
+            {
+                if (!currentEntries.TryGetValue(committedEntry.Key, out string? currentValue))
+                {
                     removedKeys.Add(committedEntry.Key);
-                } else if (committedEntry.Value != currentValue) {
+                }
+                else if (committedEntry.Value != currentValue)
+                {
                     changedKeys.Add(committedEntry.Key);
                 }
             }
 
-            foreach (var currentEntry in currentEntries) {
-                if (!committedEntries.ContainsKey(currentEntry.Key)) {
+            foreach (var currentEntry in currentEntries)
+            {
+                if (!committedEntries.ContainsKey(currentEntry.Key))
+                {
                     addedKeys.Add(currentEntry.Key);
                 }
             }
@@ -126,15 +138,18 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 $"StableABI snapshot mismatch: {totalChanges} change(s) detected. " +
                 $"To accept: dotnet build /p:UpdateStableABI=true");
 
-            foreach (string changedKey in changedKeys) {
+            foreach (string changedKey in changedKeys)
+            {
                 Log.LogError($"  CHANGED: {changedKey}: {committedEntries[changedKey]} -> {currentEntries[changedKey]}");
             }
 
-            foreach (string addedKey in addedKeys) {
+            foreach (string addedKey in addedKeys)
+            {
                 Log.LogError($"  ADDED:   {addedKey}: {currentEntries[addedKey]}");
             }
 
-            foreach (string removedKey in removedKeys) {
+            foreach (string removedKey in removedKeys)
+            {
                 Log.LogError($"  REMOVED: {removedKey}: {committedEntries[removedKey]}");
             }
 
@@ -152,10 +167,14 @@ namespace AN.CodeAnalyzers.StableABIVerification
         private static string detectLineEnding(string snapshotFilePath)
         {
             // If the file already exists, match its existing line endings
-            if (File.Exists(snapshotFilePath)) {
-                string existingFileContent = File.ReadAllText(snapshotFilePath);
+            if (File.Exists(snapshotFilePath))
+            {
+                // ReadAllBytes preserves exact line endings on disk
+                byte[] fileBytes = File.ReadAllBytes(snapshotFilePath);
+                string existingFileContent = System.Text.Encoding.UTF8.GetString(fileBytes);
                 string? detectedEnding = detectLineEndingFromContent(existingFileContent);
-                if (detectedEnding != null) {
+                if (detectedEnding != null)
+                {
                     return detectedEnding;
                 }
             }
@@ -171,10 +190,12 @@ namespace AN.CodeAnalyzers.StableABIVerification
         public static string? detectLineEndingFromContent(string fileContent)
         {
             int lfIndex = fileContent.IndexOf('\n');
-            if (lfIndex < 0) {
+            if (lfIndex < 0)
+            {
                 return null; // no newlines at all
             }
-            if (lfIndex > 0 && fileContent[lfIndex - 1] == '\r') {
+            if (lfIndex > 0 && fileContent[lfIndex - 1] == '\r')
+            {
                 return "\r\n";
             }
             return "\n";
@@ -190,7 +211,8 @@ namespace AN.CodeAnalyzers.StableABIVerification
         /// </summary>
         private static string joinLinesWithEnding(List<string> snapshotLines, string lineEnding)
         {
-            if (snapshotLines.Count == 0) {
+            if (snapshotLines.Count == 0)
+            {
                 return "";
             }
             return string.Join(lineEnding, snapshotLines) + lineEnding;
@@ -201,11 +223,14 @@ namespace AN.CodeAnalyzers.StableABIVerification
         /// </summary>
         private static List<string> readSnapshotFileAsLines(string snapshotFilePath)
         {
-            string fileContent = File.ReadAllText(snapshotFilePath);
+            byte[] fileBytes = File.ReadAllBytes(snapshotFilePath);
+            string fileContent = System.Text.Encoding.UTF8.GetString(fileBytes);
             var parsedLines = new List<string>();
-            foreach (string rawLine in fileContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)) {
+            foreach (string rawLine in fileContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+            {
                 string trimmedLine = rawLine.Trim();
-                if (trimmedLine.Length > 0) {
+                if (trimmedLine.Length > 0)
+                {
                     parsedLines.Add(trimmedLine);
                 }
             }
@@ -214,11 +239,14 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         private static bool linesAreEqual(List<string> linesA, List<string> linesB)
         {
-            if (linesA.Count != linesB.Count) {
+            if (linesA.Count != linesB.Count)
+            {
                 return false;
             }
-            for (int lineIndex = 0; lineIndex < linesA.Count; lineIndex++) {
-                if (linesA[lineIndex] != linesB[lineIndex]) {
+            for (int lineIndex = 0; lineIndex < linesA.Count; lineIndex++)
+            {
+                if (linesA[lineIndex] != linesB[lineIndex])
+                {
                     return false;
                 }
             }
@@ -227,13 +255,16 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         private static int parseSnapshotVersion(List<string> snapshotLines)
         {
-            if (snapshotLines.Count == 0) {
+            if (snapshotLines.Count == 0)
+            {
                 return 1;
             }
             string firstLine = snapshotLines[0];
-            if (firstLine.StartsWith("__stableApiVersion: ")) {
+            if (firstLine.StartsWith("__stableApiVersion: "))
+            {
                 string versionString = firstLine.Substring("__stableApiVersion: ".Length);
-                if (int.TryParse(versionString, out int parsedVersion)) {
+                if (int.TryParse(versionString, out int parsedVersion))
+                {
                     return parsedVersion;
                 }
             }
@@ -244,9 +275,11 @@ namespace AN.CodeAnalyzers.StableABIVerification
         {
             var parsedEntries = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (string snapshotLine in snapshotLines) {
+            foreach (string snapshotLine in snapshotLines)
+            {
                 int colonSeparatorIndex = snapshotLine.IndexOf(": ", StringComparison.Ordinal);
-                if (colonSeparatorIndex < 0) {
+                if (colonSeparatorIndex < 0)
+                {
                     continue;
                 }
 

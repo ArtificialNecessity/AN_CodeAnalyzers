@@ -326,9 +326,16 @@ internal class Hidden { }
         [Fact]
         public void GenerateMode_ExistingLFFile_PreservesLF()
         {
-            // Arrange: create an existing snapshot file with LF endings
-            string snapshotFilePath = Path.Combine(testOutputDirectory, "test.stableapi");
-            File.WriteAllText(snapshotFilePath, "__stableApiVersion: 2\nenum.Foo.A: 1\n");
+            // Arrange: write seed file with exact LF bytes (File.WriteAllBytes avoids any conversion)
+            string snapshotFilePath = Path.Combine(testOutputDirectory, "test_lf.stableapi");
+            byte[] lfSeedBytes = System.Text.Encoding.UTF8.GetBytes("__stableApiVersion: 2\nenum.Foo.A: 1\n");
+            File.WriteAllBytes(snapshotFilePath, lfSeedBytes);
+
+            // Verify the seed file actually has LF on disk (defensive)
+            byte[] seedBytesOnDisk = File.ReadAllBytes(snapshotFilePath);
+            string seedContentOnDisk = System.Text.Encoding.UTF8.GetString(seedBytesOnDisk);
+            Assert.Contains("\n", seedContentOnDisk);
+            Assert.DoesNotContain("\r", seedContentOnDisk);
 
             // Compile a test assembly
             string assemblyFilePath = compileTestAssembly(@"
@@ -347,20 +354,27 @@ public enum Foo { A = 1, B = 2 }
             // Act
             bool taskSucceeded = generateTask.Execute();
 
-            // Assert
+            // Assert: read back with ReadAllBytes to see exact bytes
             Assert.True(taskSucceeded);
-            string writtenContent = File.ReadAllText(snapshotFilePath);
+            byte[] outputBytes = File.ReadAllBytes(snapshotFilePath);
+            string outputContent = System.Text.Encoding.UTF8.GetString(outputBytes);
             // Must contain LF but NOT CRLF
-            Assert.Contains("\n", writtenContent);
-            Assert.DoesNotContain("\r\n", writtenContent);
+            Assert.Contains("\n", outputContent);
+            Assert.DoesNotContain("\r", outputContent);
         }
 
         [Fact]
         public void GenerateMode_ExistingCRLFFile_PreservesCRLF()
         {
-            // Arrange: create an existing snapshot file with CRLF endings
-            string snapshotFilePath = Path.Combine(testOutputDirectory, "test.stableapi");
-            File.WriteAllText(snapshotFilePath, "__stableApiVersion: 2\r\nenum.Foo.A: 1\r\n");
+            // Arrange: write seed file with exact CRLF bytes (File.WriteAllBytes avoids any conversion)
+            string snapshotFilePath = Path.Combine(testOutputDirectory, "test_crlf.stableapi");
+            byte[] crlfSeedBytes = System.Text.Encoding.UTF8.GetBytes("__stableApiVersion: 2\r\nenum.Foo.A: 1\r\n");
+            File.WriteAllBytes(snapshotFilePath, crlfSeedBytes);
+
+            // Verify the seed file actually has CRLF on disk (defensive)
+            byte[] seedBytesOnDisk = File.ReadAllBytes(snapshotFilePath);
+            string seedContentOnDisk = System.Text.Encoding.UTF8.GetString(seedBytesOnDisk);
+            Assert.Contains("\r\n", seedContentOnDisk);
 
             // Compile a test assembly
             string assemblyFilePath = compileTestAssembly(@"
@@ -379,16 +393,17 @@ public enum Foo { A = 1, B = 2 }
             // Act
             bool taskSucceeded = generateTask.Execute();
 
-            // Assert
+            // Assert: read back with ReadAllBytes to see exact bytes
             Assert.True(taskSucceeded);
-            string writtenContent = File.ReadAllText(snapshotFilePath);
+            byte[] outputBytes = File.ReadAllBytes(snapshotFilePath);
+            string outputContent = System.Text.Encoding.UTF8.GetString(outputBytes);
             // Must contain CRLF
-            Assert.Contains("\r\n", writtenContent);
+            Assert.Contains("\r\n", outputContent);
             // Every \n must be preceded by \r (no bare LF)
-            for (int charIndex = 0; charIndex < writtenContent.Length; charIndex++) {
-                if (writtenContent[charIndex] == '\n') {
-                    Assert.True(charIndex > 0 && writtenContent[charIndex - 1] == '\r',
-                        $"Found bare LF at position {charIndex} — expected CRLF");
+            for (int charIndex = 0; charIndex < outputContent.Length; charIndex++) {
+                if (outputContent[charIndex] == '\n') {
+                    Assert.True(charIndex > 0 && outputContent[charIndex - 1] == '\r',
+                        $"Found bare LF at position {charIndex} — expected CRLF everywhere");
                 }
             }
         }
