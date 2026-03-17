@@ -268,7 +268,11 @@ internal class Hidden { }
                 "Test compilation failed: " + string.Join("\n",
                     emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
 
-            return StableABISnapshotGenerator.GenerateSnapshot(assemblyFilePath, snapshotScope);
+            var snapshotLines = StableABISnapshotGenerator.GenerateSnapshotLines(assemblyFilePath, snapshotScope);
+            if (snapshotLines.Count == 0) {
+                return "";
+            }
+            return string.Join("\n", snapshotLines) + "\n";
         }
     }
 }

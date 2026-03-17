@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -10,6 +11,7 @@ namespace AN.CodeAnalyzers.StableABIVerification
     /// MSBuild Task that verifies or generates a StableABI.snapshot file.
     /// In verify mode (default): compares current assembly against committed snapshot, errors on mismatch.
     /// In generate mode: writes the snapshot file from the current assembly.
+    /// Line endings are detected from: 1) existing snapshot file, 2) platform default (Windows=CRLF, else LF).
     /// </summary>
     public class StableABIVerifyTask : Task
     {
@@ -37,50 +39,41 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         public override bool Execute()
         {
-            if (!File.Exists(AssemblyPath))
-            {
+            if (!File.Exists(AssemblyPath)) {
                 Log.LogError($"StableABI: Assembly not found at '{AssemblyPath}'. Build must complete before snapshot verification.");
                 return false;
             }
 
-            string currentSnapshotContent = StableABISnapshotGenerator.GenerateSnapshot(AssemblyPath, Scope);
+            List<string> currentSnapshotLines = StableABISnapshotGenerator.GenerateSnapshotLines(AssemblyPath, Scope);
 
-            if (GenerateMode)
-            {
-                return executeGenerateMode(currentSnapshotContent);
+            if (GenerateMode) {
+                return executeGenerateMode(currentSnapshotLines);
             }
 
-            return executeVerifyMode(currentSnapshotContent);
+            return executeVerifyMode(currentSnapshotLines);
         }
 
-        private bool executeGenerateMode(string currentSnapshotContent)
+        // ──────────────────────────────────────────────
+        // Generate mode
+        // ──────────────────────────────────────────────
+
+        private bool executeGenerateMode(List<string> currentSnapshotLines)
         {
-            File.WriteAllText(SnapshotPath, currentSnapshotContent);
+            string lineEnding = detectLineEnding(SnapshotPath);
+            string snapshotFileContent = joinLinesWithEnding(currentSnapshotLines, lineEnding);
+            File.WriteAllText(SnapshotPath, snapshotFileContent);
             Log.LogMessage(MessageImportance.High,
-                $"StableABI: Snapshot written to {SnapshotPath}");
+                $"StableABI: Snapshot written to {SnapshotPath} (line ending: {(lineEnding == "\r\n" ? "CRLF" : "LF")})");
             return true;
         }
 
-        private static int parseSnapshotVersion(string snapshotContent)
-        {
-            // Look for __stableApiVersion: N as the first line
-            foreach (string rawLine in snapshotContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)) {
-                string trimmedLine = rawLine.Trim();
-                if (trimmedLine.StartsWith("__stableApiVersion: ")) {
-                    string versionString = trimmedLine.Substring("__stableApiVersion: ".Length);
-                    if (int.TryParse(versionString, out int parsedVersion)) {
-                        return parsedVersion;
-                    }
-                }
-                break; // only check first non-empty line
-            }
-            return 1; // no version header = version 1
-        }
+        // ──────────────────────────────────────────────
+        // Verify mode
+        // ──────────────────────────────────────────────
 
-        private bool executeVerifyMode(string currentSnapshotContent)
+        private bool executeVerifyMode(List<string> currentSnapshotLines)
         {
-            if (!File.Exists(SnapshotPath))
-            {
+            if (!File.Exists(SnapshotPath)) {
                 Log.LogError(
                     "StableABI: No snapshot file found at '{0}'. " +
                     "Run 'dotnet build /p:UpdateStableABI=true' to generate one.",
@@ -88,10 +81,10 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 return false;
             }
 
-            string committedSnapshotContent = File.ReadAllText(SnapshotPath);
+            List<string> committedSnapshotLines = readSnapshotFileAsLines(SnapshotPath);
 
             // Check version compatibility
-            int committedVersion = parseSnapshotVersion(committedSnapshotContent);
+            int committedVersion = parseSnapshotVersion(committedSnapshotLines);
             if (committedVersion < StableABISnapshotGenerator.CurrentFormatVersion) {
                 Log.LogWarning(
                     "StableABI: Snapshot at '{0}' is format version {1}, current is {2}. " +
@@ -100,35 +93,29 @@ namespace AN.CodeAnalyzers.StableABIVerification
                     SnapshotPath, committedVersion, StableABISnapshotGenerator.CurrentFormatVersion);
             }
 
-            if (committedSnapshotContent == currentSnapshotContent)
-            {
+            // Compare as line lists (line-ending agnostic)
+            if (linesAreEqual(committedSnapshotLines, currentSnapshotLines)) {
                 return true; // Match — silent success
             }
 
-            // Parse both snapshots for detailed diff
-            var committedEntries = parseSnapshotLines(committedSnapshotContent);
-            var currentEntries = parseSnapshotLines(currentSnapshotContent);
+            // Parse both for detailed diff
+            var committedEntries = parseSnapshotLinesToDictionary(committedSnapshotLines);
+            var currentEntries = parseSnapshotLinesToDictionary(currentSnapshotLines);
 
             var addedKeys = new List<string>();
             var removedKeys = new List<string>();
             var changedKeys = new List<string>();
 
-            foreach (var committedEntry in committedEntries)
-            {
-                if (!currentEntries.TryGetValue(committedEntry.Key, out string? currentValue))
-                {
+            foreach (var committedEntry in committedEntries) {
+                if (!currentEntries.TryGetValue(committedEntry.Key, out string? currentValue)) {
                     removedKeys.Add(committedEntry.Key);
-                }
-                else if (committedEntry.Value != currentValue)
-                {
+                } else if (committedEntry.Value != currentValue) {
                     changedKeys.Add(committedEntry.Key);
                 }
             }
 
-            foreach (var currentEntry in currentEntries)
-            {
-                if (!committedEntries.ContainsKey(currentEntry.Key))
-                {
+            foreach (var currentEntry in currentEntries) {
+                if (!committedEntries.ContainsKey(currentEntry.Key)) {
                     addedKeys.Add(currentEntry.Key);
                 }
             }
@@ -139,44 +126,132 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 $"StableABI snapshot mismatch: {totalChanges} change(s) detected. " +
                 $"To accept: dotnet build /p:UpdateStableABI=true");
 
-            foreach (string changedKey in changedKeys)
-            {
+            foreach (string changedKey in changedKeys) {
                 Log.LogError($"  CHANGED: {changedKey}: {committedEntries[changedKey]} -> {currentEntries[changedKey]}");
             }
 
-            foreach (string addedKey in addedKeys)
-            {
+            foreach (string addedKey in addedKeys) {
                 Log.LogError($"  ADDED:   {addedKey}: {currentEntries[addedKey]}");
             }
 
-            foreach (string removedKey in removedKeys)
-            {
+            foreach (string removedKey in removedKeys) {
                 Log.LogError($"  REMOVED: {removedKey}: {committedEntries[removedKey]}");
             }
 
             return false;
         }
 
-        private static Dictionary<string, string> parseSnapshotLines(string snapshotContent)
+        // ──────────────────────────────────────────────
+        // Line ending detection
+        // ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Detects the line ending to use when writing the snapshot file.
+        /// Priority: 1) existing file's line endings, 2) platform default (Windows=CRLF, else LF).
+        /// </summary>
+        private static string detectLineEnding(string snapshotFilePath)
+        {
+            // If the file already exists, match its existing line endings
+            if (File.Exists(snapshotFilePath)) {
+                string existingFileContent = File.ReadAllText(snapshotFilePath);
+                string? detectedEnding = detectLineEndingFromContent(existingFileContent);
+                if (detectedEnding != null) {
+                    return detectedEnding;
+                }
+            }
+
+            // Platform default: Windows = CRLF, everything else = LF
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "\r\n" : "\n";
+        }
+
+        /// <summary>
+        /// Detects line ending from file content by looking for the first newline.
+        /// Returns "\r\n" if CRLF found, "\n" if LF found, null if no newlines.
+        /// </summary>
+        internal static string? detectLineEndingFromContent(string fileContent)
+        {
+            int lfIndex = fileContent.IndexOf('\n');
+            if (lfIndex < 0) {
+                return null; // no newlines at all
+            }
+            if (lfIndex > 0 && fileContent[lfIndex - 1] == '\r') {
+                return "\r\n";
+            }
+            return "\n";
+        }
+
+        // ──────────────────────────────────────────────
+        // Snapshot line helpers
+        // ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Joins lines with the specified line ending, with a trailing line ending.
+        /// Returns empty string for empty list.
+        /// </summary>
+        private static string joinLinesWithEnding(List<string> snapshotLines, string lineEnding)
+        {
+            if (snapshotLines.Count == 0) {
+                return "";
+            }
+            return string.Join(lineEnding, snapshotLines) + lineEnding;
+        }
+
+        /// <summary>
+        /// Reads a snapshot file and splits into lines, stripping line endings.
+        /// </summary>
+        private static List<string> readSnapshotFileAsLines(string snapshotFilePath)
+        {
+            string fileContent = File.ReadAllText(snapshotFilePath);
+            var parsedLines = new List<string>();
+            foreach (string rawLine in fileContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)) {
+                string trimmedLine = rawLine.Trim();
+                if (trimmedLine.Length > 0) {
+                    parsedLines.Add(trimmedLine);
+                }
+            }
+            return parsedLines;
+        }
+
+        private static bool linesAreEqual(List<string> linesA, List<string> linesB)
+        {
+            if (linesA.Count != linesB.Count) {
+                return false;
+            }
+            for (int lineIndex = 0; lineIndex < linesA.Count; lineIndex++) {
+                if (linesA[lineIndex] != linesB[lineIndex]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static int parseSnapshotVersion(List<string> snapshotLines)
+        {
+            if (snapshotLines.Count == 0) {
+                return 1;
+            }
+            string firstLine = snapshotLines[0];
+            if (firstLine.StartsWith("__stableApiVersion: ")) {
+                string versionString = firstLine.Substring("__stableApiVersion: ".Length);
+                if (int.TryParse(versionString, out int parsedVersion)) {
+                    return parsedVersion;
+                }
+            }
+            return 1; // no version header = version 1
+        }
+
+        private static Dictionary<string, string> parseSnapshotLinesToDictionary(List<string> snapshotLines)
         {
             var parsedEntries = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (string rawLine in snapshotContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                string trimmedLine = rawLine.Trim();
-                if (trimmedLine.Length == 0)
-                {
+            foreach (string snapshotLine in snapshotLines) {
+                int colonSeparatorIndex = snapshotLine.IndexOf(": ", StringComparison.Ordinal);
+                if (colonSeparatorIndex < 0) {
                     continue;
                 }
 
-                int colonSeparatorIndex = trimmedLine.IndexOf(": ", StringComparison.Ordinal);
-                if (colonSeparatorIndex < 0)
-                {
-                    continue;
-                }
-
-                string entryKey = trimmedLine.Substring(0, colonSeparatorIndex);
-                string entryValue = trimmedLine.Substring(colonSeparatorIndex + 2);
+                string entryKey = snapshotLine.Substring(0, colonSeparatorIndex);
+                string entryValue = snapshotLine.Substring(colonSeparatorIndex + 2);
                 parsedEntries[entryKey] = entryValue;
             }
 

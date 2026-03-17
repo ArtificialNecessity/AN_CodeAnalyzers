@@ -29,14 +29,15 @@ namespace AN.CodeAnalyzers.StableABIVerification
         public const int CurrentFormatVersion = 2;
 
         /// <summary>
-        /// Generates the full snapshot content from a compiled assembly.
+        /// Generates the snapshot as a sorted list of lines from a compiled assembly.
+        /// The first line is always the version header. Lines do NOT include line endings.
         /// </summary>
         /// <param name="assemblyFilePath">Path to the compiled DLL.</param>
         /// <param name="snapshotScope">"public" for public types only, "all" for all types.</param>
-        /// <returns>Sorted snapshot content string, one fact per line, newline-terminated.</returns>
-        public static string GenerateSnapshot(string assemblyFilePath, string snapshotScope)
+        /// <returns>Sorted list of snapshot lines (version header first), or empty list if no facts.</returns>
+        public static List<string> GenerateSnapshotLines(string assemblyFilePath, string snapshotScope)
         {
-            var snapshotLines = new List<string>();
+            var snapshotFactLines = new List<string>();
 
             using var fileStream = new FileStream(assemblyFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             using var peReader = new PEReader(fileStream);
@@ -62,42 +63,44 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 string typeDisplayName = buildTypeDisplayName(typeName, typeNamespace, typeDefinition, metadataReader);
 
                 // Emit type declaration
-                collectTypeFact(typeDefinition, typeDisplayName, metadataReader, snapshotLines);
+                collectTypeFact(typeDefinition, typeDisplayName, metadataReader, snapshotFactLines);
 
                 if (isEnum(typeDefinition, metadataReader))
                 {
-                    collectEnumFacts(typeDefinition, typeDisplayName, metadataReader, snapshotLines);
+                    collectEnumFacts(typeDefinition, typeDisplayName, metadataReader, snapshotFactLines);
                 }
                 else if (isStruct(typeDefinition, metadataReader))
                 {
-                    collectStructFacts(typeDefinition, typeDisplayName, metadataReader, snapshotLines);
-                    collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectStructFacts(typeDefinition, typeDisplayName, metadataReader, snapshotFactLines);
+                    collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
                 }
                 else
                 {
-                    collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
-                    collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotLines);
+                    collectConstFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectFieldFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectMethodFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectPropertyFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectEventFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
+                    collectDefaultParameterFacts(typeDefinition, typeDisplayName, snapshotScope, metadataReader, snapshotFactLines);
                 }
             }
 
-            snapshotLines.Sort(StringComparer.Ordinal);
+            snapshotFactLines.Sort(StringComparer.Ordinal);
 
-            if (snapshotLines.Count == 0)
-            {
-                return "";
+            if (snapshotFactLines.Count == 0) {
+                return new List<string>();
             }
 
-            // Prepend version header (not sorted — always first line)
-            return $"__stableApiVersion: {CurrentFormatVersion}\n" + string.Join("\n", snapshotLines) + "\n";
+            // Prepend version header (always first line, not sorted)
+            var resultLines = new List<string>(snapshotFactLines.Count + 1);
+            resultLines.Add($"__stableApiVersion: {CurrentFormatVersion}");
+            resultLines.AddRange(snapshotFactLines);
+            return resultLines;
         }
 
         // ──────────────────────────────────────────────
