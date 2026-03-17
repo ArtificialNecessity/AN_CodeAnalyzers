@@ -61,7 +61,9 @@ namespace AN.CodeAnalyzers.StableABIVerification
 
         private bool executeGenerateMode(List<string> currentSnapshotLines)
         {
-            string lineEnding = detectLineEnding(SnapshotPath);
+            LineEndingMode mode = detectLineEnding(SnapshotPath);
+            string lineEnding = lineEndingModeToString(mode);
+            Log.LogMessage(MessageImportance.High, $"StableABI: Detected line ending: {mode} for {SnapshotPath}");
             string snapshotFileContent = joinLinesWithEnding(currentSnapshotLines, lineEnding);
             byte[] snapshotFileBytes = System.Text.Encoding.UTF8.GetBytes(snapshotFileContent);
             File.WriteAllBytes(SnapshotPath, snapshotFileBytes);
@@ -160,11 +162,18 @@ namespace AN.CodeAnalyzers.StableABIVerification
         // Line ending detection
         // ──────────────────────────────────────────────
 
+        public enum LineEndingMode
+        {
+            Unknown,
+            CRLF,
+            LF
+        }
+
         /// <summary>
         /// Detects the line ending to use when writing the snapshot file.
         /// Priority: 1) existing file's line endings, 2) platform default (Windows=CRLF, else LF).
         /// </summary>
-        private static string detectLineEnding(string snapshotFilePath)
+        private static LineEndingMode detectLineEnding(string snapshotFilePath)
         {
             // If the file already exists, match its existing line endings
             if (File.Exists(snapshotFilePath))
@@ -172,33 +181,26 @@ namespace AN.CodeAnalyzers.StableABIVerification
                 // ReadAllBytes preserves exact line endings on disk
                 byte[] fileBytes = File.ReadAllBytes(snapshotFilePath);
                 string existingFileContent = System.Text.Encoding.UTF8.GetString(fileBytes);
-                string? detectedEnding = detectLineEndingFromContent(existingFileContent);
-                if (detectedEnding != null)
-                {
-                    return detectedEnding;
-                }
+                return detectLineEndingFromContent(existingFileContent);
             }
 
-            // Platform default: Windows = CRLF, everything else = LF
+            return LineEndingMode.Unknown;
+        }
+
+        public static string lineEndingModeToString(LineEndingMode mode)
+        {
+            if (mode == LineEndingMode.CRLF) return "\r\n";
+            if (mode == LineEndingMode.LF) return "\n";
+
+            // Fallback to platform default
             return RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "\r\n" : "\n";
         }
 
-        /// <summary>
-        /// Detects line ending from file content by looking for the first newline.
-        /// Returns "\r\n" if CRLF found, "\n" if LF found, null if no newlines.
-        /// </summary>
-        public static string? detectLineEndingFromContent(string fileContent)
+        public static LineEndingMode detectLineEndingFromContent(string fileContent)
         {
-            int lfIndex = fileContent.IndexOf('\n');
-            if (lfIndex < 0)
-            {
-                return null; // no newlines at all
-            }
-            if (lfIndex > 0 && fileContent[lfIndex - 1] == '\r')
-            {
-                return "\r\n";
-            }
-            return "\n";
+            if (fileContent.IndexOf('\r') >= 0) return LineEndingMode.CRLF;
+            if (fileContent.IndexOf('\n') >= 0) return LineEndingMode.LF;
+            return LineEndingMode.Unknown;
         }
 
         // ──────────────────────────────────────────────

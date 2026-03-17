@@ -23,16 +23,8 @@
        its own process and locks it until shutdown. -->
   <UsingTask
     TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll"
-    TaskFactory="TaskHostFactory"
-    Condition="Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
-  
-  <!-- Fallback for local development (load from bin directory) -->
-  <UsingTask
-    TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
     AssemblyFile="$(MSBuildThisFileDirectory)..\StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll"
-    TaskFactory="TaskHostFactory"
-    Condition="!Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\StableABIVerification.dll')" />
+    TaskFactory="TaskHostFactory" />
 
   <!-- Snapshot filename: $(AssemblyName).stableapi next to the .csproj -->
   <PropertyGroup>
@@ -77,16 +69,8 @@
 
   <UsingTask
     TaskName="AN.CodeAnalyzers.VerifyUserConfigGitignore.VerifyUserConfigGitignoreTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll"
-    TaskFactory="TaskHostFactory"
-    Condition="Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll')" />
-  
-  <!-- Fallback for local development (load from bin directory) -->
-  <UsingTask
-    TaskName="AN.CodeAnalyzers.VerifyUserConfigGitignore.VerifyUserConfigGitignoreTask"
     AssemblyFile="$(MSBuildThisFileDirectory)..\VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll"
-    TaskFactory="TaskHostFactory"
-    Condition="!Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll')" />
+    TaskFactory="TaskHostFactory" />
 
   <!-- Default severity to error if not specified -->
   <PropertyGroup>

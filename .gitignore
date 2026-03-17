@@ -1,6 +1,7 @@
 # Build outputs
 bin/
 obj/
+tasks/
 
 # Environment Keys
 *.env

@@ -303,24 +303,24 @@ internal class Hidden { }
         public void DetectLineEnding_CRLFContent_ReturnsCRLF()
         {
             string crlfContent = "line1\r\nline2\r\nline3\r\n";
-            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(crlfContent);
-            Assert.Equal("\r\n", detectedEnding);
+            var detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(crlfContent);
+            Assert.Equal(StableABIVerifyTask.LineEndingMode.CRLF, detectedEnding);
         }
 
         [Fact]
         public void DetectLineEnding_LFContent_ReturnsLF()
         {
             string lfContent = "line1\nline2\nline3\n";
-            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(lfContent);
-            Assert.Equal("\n", detectedEnding);
+            var detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(lfContent);
+            Assert.Equal(StableABIVerifyTask.LineEndingMode.LF, detectedEnding);
         }
 
         [Fact]
         public void DetectLineEnding_NoNewlines_ReturnsNull()
         {
             string noNewlineContent = "single line no ending";
-            string? detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(noNewlineContent);
-            Assert.Null(detectedEnding);
+            var detectedEnding = StableABIVerifyTask.detectLineEndingFromContent(noNewlineContent);
+            Assert.Equal(StableABIVerifyTask.LineEndingMode.Unknown, detectedEnding);
         }
 
         [Fact]
