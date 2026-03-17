@@ -242,6 +242,134 @@ namespace AN.CodeAnalyzers.Tests
             Assert.NotEmpty(fakeBuildEngine.LoggedErrors);
             Assert.Contains("nonexistent", fakeBuildEngine.LoggedErrors[0]);
         }
+
+        // ═══════════════════════════════════════════════════════════
+        // Write value tests - WriteValueToString and WriteValueToFile
+        // ═══════════════════════════════════════════════════════════
+
+        [Fact]
+        public void WriteValueToString_UnquotedInteger_PreservesUnquotedStyle()
+        {
+            string originalJson = @"{ ""count"": 42 }";
+            string modifiedJson = JsonPeekParser.WriteValueToString(originalJson, "count", "99");
+            
+            Assert.Contains("\"count\": 99", modifiedJson);
+            Assert.DoesNotContain("\"99\"", modifiedJson); // Should NOT be quoted
+        }
+
+        [Fact]
+        public void WriteValueToString_QuotedString_PreservesQuotedStyle()
+        {
+            string originalJson = @"{ ""version"": ""1.0"" }";
+            string modifiedJson = JsonPeekParser.WriteValueToString(originalJson, "version", "2.0");
+            
+            Assert.Contains("\"version\": \"2.0\"", modifiedJson);
+        }
+
+        [Fact]
+        public void WriteValueToString_PreservesComments()
+        {
+            string originalJson = @"
+{
+  // This is a comment
+  ""version"": ""1.0"",
+  ""count"": 5
+}";
+            string modifiedJson = JsonPeekParser.WriteValueToString(originalJson, "version", "2.0");
+            
+            Assert.Contains("// This is a comment", modifiedJson);
+            Assert.Contains("\"version\": \"2.0\"", modifiedJson);
+        }
+
+        [Fact]
+        public void WriteValueToString_HjsonUnquotedKey_Works()
+        {
+            string originalHjson = "{ version: 1.0 }";
+            string modifiedHjson = JsonPeekParser.WriteValueToString(originalHjson, "version", "2.0");
+            
+            Assert.Contains("version: 2.0", modifiedHjson);
+        }
+
+        [Fact]
+        public void WriteValueToFile_ModifiesFileAndPreservesComments()
+        {
+            string originalContent = @"
+{
+  // Version comment
+  ""version"": ""1.0"",
+  ""buildNumberOffset"": 5
+}";
+            string testFilePath = writeTestFile("write-test.json", originalContent);
+            
+            JsonPeekParser.WriteValueToFile(testFilePath, "buildNumberOffset", "10");
+            
+            string modifiedContent = File.ReadAllText(testFilePath);
+            Assert.Contains("// Version comment", modifiedContent);
+            Assert.Contains("\"buildNumberOffset\": 10", modifiedContent);
+            Assert.Contains("\"version\": \"1.0\"", modifiedContent); // Other values unchanged
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // Increment integer tests - IncrementIntegerInFile
+        // ═══════════════════════════════════════════════════════════
+
+        [Fact]
+        public void IncrementIntegerInFile_IncrementsBy1_ReturnsNewValue()
+        {
+            string testFilePath = writeTestFile("increment-test.json", @"{ ""count"": 5 }");
+            
+            int newValue = JsonPeekParser.IncrementIntegerInFile(testFilePath, "count");
+            
+            Assert.Equal(6, newValue);
+            string modifiedContent = File.ReadAllText(testFilePath);
+            Assert.Contains("\"count\": 6", modifiedContent);
+        }
+
+        [Fact]
+        public void IncrementIntegerInFile_CustomAmount_IncrementsCorrectly()
+        {
+            string testFilePath = writeTestFile("increment-custom.json", @"{ ""buildNumber"": 10 }");
+            
+            int newValue = JsonPeekParser.IncrementIntegerInFile(testFilePath, "buildNumber", 5);
+            
+            Assert.Equal(15, newValue);
+            string modifiedContent = File.ReadAllText(testFilePath);
+            Assert.Contains("\"buildNumber\": 15", modifiedContent);
+        }
+
+        [Fact]
+        public void IncrementIntegerInFile_PreservesComments()
+        {
+            string originalContent = @"
+{
+  // Build number comment
+  ""buildNumberOffset"": 3,
+  // Other comment
+  ""version"": ""0.1""
+}";
+            string testFilePath = writeTestFile("increment-comments.json", originalContent);
+            
+            int newValue = JsonPeekParser.IncrementIntegerInFile(testFilePath, "buildNumberOffset");
+            
+            Assert.Equal(4, newValue);
+            string modifiedContent = File.ReadAllText(testFilePath);
+            Assert.Contains("// Build number comment", modifiedContent);
+            Assert.Contains("// Other comment", modifiedContent);
+            Assert.Contains("\"buildNumberOffset\": 4", modifiedContent);
+            Assert.Contains("\"version\": \"0.1\"", modifiedContent); // Other values unchanged
+        }
+
+        [Fact]
+        public void IncrementIntegerInFile_NonIntegerValue_ThrowsInvalidOperationException()
+        {
+            string testFilePath = writeTestFile("increment-string.json", @"{ ""version"": ""1.0"" }");
+            
+            var thrownException = Assert.Throws<InvalidOperationException>(() =>
+                JsonPeekParser.IncrementIntegerInFile(testFilePath, "version"));
+            
+            Assert.Contains("not an integer", thrownException.Message);
+            Assert.Contains("1.0", thrownException.Message);
+        }
     }
 
     /// <summary>

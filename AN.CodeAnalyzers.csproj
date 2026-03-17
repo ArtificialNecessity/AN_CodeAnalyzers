@@ -15,7 +15,7 @@
     <Description>C# code analyzers for preventing silent binary compatibility breaks in C# projects (guardrails for humans and AI). Includes ExplicitEnums (AN0001), PublicConstAnalyzer (AN0002), StableABI snapshot verification, VerifyUserConfigGitignore, and JsonPeek MSBuild tasks.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</PackageProjectUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README-nuget.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>roslyn;analyzer;code-analysis;binary-compatibility;enum;const;abi;stable-api</PackageTags>
@@ -34,8 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pack README.md for NuGet.org package page -->
-    <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Pack README-nuget.md for NuGet.org package page (stripped-down version without source tree details) -->
+    <None Include="README-nuget.md" Pack="true" PackagePath="\" />
     <!-- Pack the analyzer DLL in the analyzers/dotnet/cs directory -->
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <!-- Pack the .targets file so consuming projects get MSBuild targets automatically -->
@@ -52,23 +52,39 @@
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
-       Git-height versioning: {major}.{minor}.{buildNumberOffset}-{GitHeight}.{BuildNum}.g{GitHash}
-       Example: 0.1.2-14.3.gfba06ee
-       Reads base version + buildNumberOffset from version.json at repo root
-       using the locally-built JsonPeek task (self-hosted — we ARE the package).
-       BuildNum auto-increments on every build via buildnum.txt.
-       For a clean release: dotnet build /p:Version=0.1.2
+       Version computation — two self-contained targets:
+       
+       GeneratePrereleaseVersion  (default)
+         Produces: {major}.{minor}.{offset}-{gitHeight}.{buildNum}.g{hash}
+         Example:  0.1.8-47.12.gfba06ee
+       
+       GenerateReleaseVersion  (dotnet pack -c Release /p:NewRelease=true)
+         Increments buildNumberOffset in version.json, then produces a clean version.
+         Example:  0.1.9
+       
+       Both read version.json via the JsonPeek CLI tool (avoids UsingTask
+       chicken-and-egg: the DLL isn't loaded at project-evaluation time).
        ════════════════════════════════════════════════════════════════ -->
 
-  <!-- Register the locally-built JsonPeek task for reading version.json
-       (we can't use the NuGet package version because we ARE the package) -->
-  <UsingTask
-    TaskName="AN.CodeAnalyzers.JsonPeek"
-    AssemblyFile="$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll"
-    Condition="Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')" />
+  <Target Name="GeneratePrereleaseVersion"
+          BeforeTargets="GenerateNuspecDependencies;GenerateNuspec;GetPackageVersionInfo;Pack;GenerateAssemblyInfo"
+          Condition="'$(NewRelease)' != 'true'">
 
-  <!-- Increment buildnum.txt before computing the version -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="ComputeGitVersion">
+    <!-- 1. Build the JsonPeek CLI tool so we can read version.json -->
+    <MSBuild Projects="CoreTools\CoreTools.csproj" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Properties="Configuration=$(Configuration)" />
+
+    <!-- 2. Read base version + buildNumberOffset from version.json -->
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildProjectDirectory)\version.json&quot; version"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BaseVersionFromJson" />
+    </Exec>
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildProjectDirectory)\version.json&quot; buildNumberOffset"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BuildNumberOffsetFromJson" />
+    </Exec>
+
+    <!-- 3. Increment local build number (buildnum.txt) -->
     <ReadLinesFromFile File="$(MSBuildProjectDirectory)\buildnum.txt" Condition="Exists('$(MSBuildProjectDirectory)\buildnum.txt')">
       <Output TaskParameter="Lines" PropertyName="PreviousBuildNumber" />
     </ReadLinesFromFile>
@@ -77,42 +93,60 @@
       <LocalBuildNumber>$([MSBuild]::Add($(PreviousBuildNumber), 1))</LocalBuildNumber>
     </PropertyGroup>
     <WriteLinesToFile File="$(MSBuildProjectDirectory)\buildnum.txt" Lines="$(LocalBuildNumber)" Overwrite="true" />
-  </Target>
 
-  <Target Name="ComputeGitVersion" BeforeTargets="GenerateNuspecDependencies;GetPackageVersionInfo;Pack;GenerateAssemblyInfo">
-
-    <!-- Read base version and buildNumberOffset from version.json via locally-built JsonPeek -->
-    <JsonPeek File="$(MSBuildProjectDirectory)\version.json" KeyPath="version"
-              Condition="Exists('$(MSBuildProjectDirectory)\version.json') AND Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')">
-      <Output TaskParameter="Value" PropertyName="_BaseVersionFromJson" />
-    </JsonPeek>
-    <JsonPeek File="$(MSBuildProjectDirectory)\version.json" KeyPath="buildNumberOffset"
-              Condition="Exists('$(MSBuildProjectDirectory)\version.json') AND Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')">
-      <Output TaskParameter="Value" PropertyName="_BuildNumberOffsetFromJson" />
-    </JsonPeek>
-
-    <!-- Compose VersionPrefix: {major}.{minor}.{buildNumberOffset} -->
-    <PropertyGroup Condition="'$(_BaseVersionFromJson)' != ''">
-      <_BuildNumberOffsetFromJson Condition="'$(_BuildNumberOffsetFromJson)' == ''">0</_BuildNumberOffsetFromJson>
-      <VersionPrefix>$(_BaseVersionFromJson).$(_BuildNumberOffsetFromJson)</VersionPrefix>
-    </PropertyGroup>
-
+    <!-- 4. Get git height + short hash -->
     <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHeight" />
     </Exec>
     <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="GitShortHash" />
     </Exec>
+
+    <!-- 5. Compose prerelease version -->
     <PropertyGroup>
+      <_BuildNumberOffsetFromJson Condition="'$(_BuildNumberOffsetFromJson)' == ''">0</_BuildNumberOffsetFromJson>
+      <VersionPrefix>$(_BaseVersionFromJson).$(_BuildNumberOffsetFromJson)</VersionPrefix>
       <Version>$(VersionPrefix)-$(GitCommitHeight).$(LocalBuildNumber).g$(GitShortHash)</Version>
       <PackageVersion>$(Version)</PackageVersion>
       <InformationalVersion>$(Version)</InformationalVersion>
     </PropertyGroup>
-    <Message Importance="High" Text="AN.CodeAnalyzers version: $(Version)" />
+
+    <Message Importance="High" Text="AN.CodeAnalyzers prerelease version: $(Version)" />
   </Target>
 
-  <!-- Deploy .nupkg to local NuGet feed after pack -->
-  <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != ''">
+  <Target Name="GenerateReleaseVersion"
+          BeforeTargets="GenerateNuspecDependencies;GenerateNuspec;GetPackageVersionInfo;Pack;GenerateAssemblyInfo"
+          Condition="'$(NewRelease)' == 'true'">
+
+    <!-- 1. Build the JsonPeek CLI tool so we can read + write version.json -->
+    <MSBuild Projects="CoreTools\CoreTools.csproj" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Properties="Configuration=$(Configuration)" />
+
+    <!-- 2. Read base version from version.json -->
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildProjectDirectory)\version.json&quot; version"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BaseVersionFromJson" />
+    </Exec>
+
+    <!-- 3. Increment buildNumberOffset in version.json and capture new value -->
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; --inc-integer &quot;$(MSBuildProjectDirectory)\version.json&quot; buildNumberOffset"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_NewBuildNumberOffset" />
+    </Exec>
+
+    <!-- 4. Compose clean release version -->
+    <PropertyGroup>
+      <VersionPrefix>$(_BaseVersionFromJson).$(_NewBuildNumberOffset)</VersionPrefix>
+      <Version>$(VersionPrefix)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="AN.CodeAnalyzers release version: $(Version)" />
+  </Target>
+
+  <!-- Deploy .nupkg to local NuGet feed after pack (skip for NewRelease builds) -->
+  <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != '' AND '$(NewRelease)' != 'true'">
     <MakeDir Directories="$(LocalNuGetFeedPath)" Condition="!Exists('$(LocalNuGetFeedPath)')" />
     <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
           DestinationFolder="$(LocalNuGetFeedPath)"
