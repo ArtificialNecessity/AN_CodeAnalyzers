@@ -3,7 +3,7 @@
 (C)opyright 2026 by David Jeske
 Licensed under the Apache License, Version 2.0
 
-Roslyn code analyzers for preventing silent binary compatibility breaks in C# projects.
+Roslyn code analyzers and MSBuild tools for preventing silent binary compatibility breaks in C# projects.
 
 ## Analyzer Summary
 
@@ -13,11 +13,12 @@ Roslyn code analyzers for preventing silent binary compatibility breaks in C# pr
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
 | **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration. |
+| **JsonPeek** | —     | MSBuild task + standalone CLI tool that reads values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic. |
 
 ## Installation
 
 ```xml
-<PackageReference Include="AN.CodeAnalyzers" Version="0.1.0">
+<PackageReference Include="AN.CodeAnalyzers" Version="0.1.1">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 </PackageReference>
@@ -42,6 +43,13 @@ AN_CodeAnalyzers/
 │   ├── StableABIVerification.csproj
 │   ├── StableABISnapshotGenerator.cs    (SRM-based, reads compiled DLL)
 │   ├── StableABIVerifyTask.cs           (MSBuild Task: verify + generate)
+│   └── Tests/
+├── CoreTools/                           ← MSBuild tasks + CLI tools (separate project)
+│   ├── CoreTools.csproj                 (assembly: JsonPeekTask.dll, netstandard2.0)
+│   ├── JsonPeekParser.cs                (HJSON/JSON/JSONC parser)
+│   ├── JsonPeekTask.cs                  (MSBuild Task: JsonPeek)
+│   ├── JsonPeekTool/                    (standalone CLI: JsonPeek.exe)
+│   │   └── AN.CodeAnalyzers.JsonPeek.Tool.csproj
 │   └── Tests/
 ├── build/
 │   └── AN.CodeAnalyzers.targets
@@ -183,6 +191,52 @@ VerifyUserConfigGitignore: 2 file(s) not covered by .gitignore.
   NOT IGNORED: global.json
 Add these entries to your .gitignore to prevent accidental commits of local configuration.
 ```
+
+### JsonPeek
+
+An MSBuild task and standalone CLI tool that reads values from JSON, JSONC (JSON with comments), or HJSON files by dot-separated key path. Uses the [Hjson](https://hjson.github.io/) parser which is a superset of JSON — handles all three formats transparently regardless of file extension.
+
+**MSBuild usage:**
+
+```xml
+<JsonPeek File="config.hjson" KeyPath="version">
+  <Output TaskParameter="Value" PropertyName="ConfigVersion" />
+</JsonPeek>
+
+<!-- Nested key paths with dot notation -->
+<JsonPeek File="package.json" KeyPath="dependencies.Newtonsoft.Json">
+  <Output TaskParameter="Value" PropertyName="NewtonsoftVersion" />
+</JsonPeek>
+```
+
+**Standalone CLI usage:**
+
+```bash
+# Read a top-level key
+JsonPeek config.json version
+# Output: 1.0.0
+
+# Read a nested key
+JsonPeek package.json dependencies.Hjson
+# Output: 3.0.0
+
+# Works with HJSON (unquoted keys/values, comments)
+JsonPeek config.hjson database.host
+# Output: localhost
+```
+
+**Supported formats** (detected by content, not extension):
+- **JSON** — standard `{ "key": "value" }`
+- **JSONC** — JSON with `//` and `/* */` comments
+- **HJSON** — Human JSON: unquoted keys/values, comments, multiline strings
+
+**Task parameters:**
+
+| Parameter | Direction | Description |
+|---|---|---|
+| `File` | Input (required) | Path to the JSON/JSONC/HJSON file |
+| `KeyPath` | Input (required) | Dot-separated key path (e.g. `version` or `parent.child.key`) |
+| `Value` | Output | The extracted value as a string |
 
 ## Building
 

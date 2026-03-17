@@ -95,4 +95,21 @@
       Severity="$(VerifyUserConfigGitignoreSeverity)" />
   </Target>
 
+  <!-- ════════════════════════════════════════════════════════════════
+       JsonPeek (MSBuild Task - Out-of-Process)
+       
+       Reads a value from a JSON/JSONC/HJSON file by dot-separated key path.
+       Extension-agnostic — parses content regardless of file extension.
+       
+       Usage:
+         <JsonPeek File="config.json" KeyPath="version">
+           <Output TaskParameter="Value" PropertyName="ConfigVersion" />
+         </JsonPeek>
+       ════════════════════════════════════════════════════════════════ -->
+
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.JsonPeek"
+    AssemblyFile="$(ANCodeAnalyzersTaskDir)JsonPeekTask.dll"
+    TaskFactory="TaskHostFactory" />
+
 </Project>

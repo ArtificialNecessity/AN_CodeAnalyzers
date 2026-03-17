@@ -6,13 +6,13 @@
     <Nullable>enable</Nullable>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsRoslynComponent>true</IsRoslynComponent>
-    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**;CoreTools/**</DefaultItemExcludes>
 
     <!-- Package properties -->
     <PackageId>ArtificialNecessity.CodeAnalyzers</PackageId>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.0.0</VersionPrefix>
     <Authors>David Jeske</Authors>
-    <Description>C# code analyzers for preventing silent binary compatibility breaks in C# projects (guardrails for humans and AI). Includes ExplicitEnums (AN0001), PublicConstAnalyzer (AN0002), StableABI snapshot verification, and VerifyUserConfigGitignore MSBuild tasks.</Description>
+    <Description>C# code analyzers for preventing silent binary compatibility breaks in C# projects (guardrails for humans and AI). Includes ExplicitEnums (AN0001), PublicConstAnalyzer (AN0002), StableABI snapshot verification, VerifyUserConfigGitignore, and JsonPeek MSBuild tasks.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -46,16 +46,29 @@
     <!-- Pack the VerifyUserConfigGitignore MSBuild task DLL in the tasks/ directory -->
     <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll')" />
+    <!-- Pack the JsonPeek MSBuild task DLL in the tasks/ directory -->
+    <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
+    <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll')" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
-       Git-height versioning: {VersionPrefix}-{GitHeight}.{BuildNum}.g{GitHash}
-       Example: 0.1.0-42.3.ga121087c
-       BuildNum auto-increments on every build via buildnum.txt
+       Git-height versioning: {major}.{minor}.{buildNumberOffset}-{GitHeight}.{BuildNum}.g{GitHash}
+       Example: 0.1.2-14.3.gfba06ee
+       Reads base version + buildNumberOffset from version.json at repo root
+       using the locally-built JsonPeek task (self-hosted — we ARE the package).
+       BuildNum auto-increments on every build via buildnum.txt.
+       For a clean release: dotnet build /p:Version=0.1.2
        ════════════════════════════════════════════════════════════════ -->
 
-  <!-- Increment buildnum.txt before computing the version (skip if Version explicitly set) -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="ComputeGitVersion" Condition="'$(Version)' == ''">
+  <!-- Register the locally-built JsonPeek task for reading version.json
+       (we can't use the NuGet package version because we ARE the package) -->
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.JsonPeek"
+    AssemblyFile="$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll"
+    Condition="Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')" />
+
+  <!-- Increment buildnum.txt before computing the version -->
+  <Target Name="IncrementBuildNumber" BeforeTargets="ComputeGitVersion">
     <ReadLinesFromFile File="$(MSBuildProjectDirectory)\buildnum.txt" Condition="Exists('$(MSBuildProjectDirectory)\buildnum.txt')">
       <Output TaskParameter="Lines" PropertyName="PreviousBuildNumber" />
     </ReadLinesFromFile>
@@ -66,7 +79,24 @@
     <WriteLinesToFile File="$(MSBuildProjectDirectory)\buildnum.txt" Lines="$(LocalBuildNumber)" Overwrite="true" />
   </Target>
 
-  <Target Name="ComputeGitVersion" BeforeTargets="GenerateNuspecDependencies;GetPackageVersionInfo;Pack;GenerateAssemblyInfo" Condition="'$(Version)' == ''">
+  <Target Name="ComputeGitVersion" BeforeTargets="GenerateNuspecDependencies;GetPackageVersionInfo;Pack;GenerateAssemblyInfo">
+
+    <!-- Read base version and buildNumberOffset from version.json via locally-built JsonPeek -->
+    <JsonPeek File="$(MSBuildProjectDirectory)\version.json" KeyPath="version"
+              Condition="Exists('$(MSBuildProjectDirectory)\version.json') AND Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')">
+      <Output TaskParameter="Value" PropertyName="_BaseVersionFromJson" />
+    </JsonPeek>
+    <JsonPeek File="$(MSBuildProjectDirectory)\version.json" KeyPath="buildNumberOffset"
+              Condition="Exists('$(MSBuildProjectDirectory)\version.json') AND Exists('$(MSBuildProjectDirectory)\CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll')">
+      <Output TaskParameter="Value" PropertyName="_BuildNumberOffsetFromJson" />
+    </JsonPeek>
+
+    <!-- Compose VersionPrefix: {major}.{minor}.{buildNumberOffset} -->
+    <PropertyGroup Condition="'$(_BaseVersionFromJson)' != ''">
+      <_BuildNumberOffsetFromJson Condition="'$(_BuildNumberOffsetFromJson)' == ''">0</_BuildNumberOffsetFromJson>
+      <VersionPrefix>$(_BaseVersionFromJson).$(_BuildNumberOffsetFromJson)</VersionPrefix>
+    </PropertyGroup>
+
     <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHeight" />
     </Exec>
