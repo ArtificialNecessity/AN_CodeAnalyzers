@@ -7,6 +7,15 @@
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
+       Task DLL location:
+         NuGet consumption (default): {package}/tasks/netstandard2.0/
+         Source-tree dev: set ANCodeAnalyzersTaskDir before importing this file
+       ════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <ANCodeAnalyzersTaskDir Condition="'$(ANCodeAnalyzersTaskDir)' == ''">$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\</ANCodeAnalyzersTaskDir>
+  </PropertyGroup>
+
+  <!-- ════════════════════════════════════════════════════════════════
        StableABI Snapshot Verification (MSBuild Task - Out-of-Process)
 
        TaskHostFactory runs the task in a separate process, avoiding DLL locking.
@@ -23,7 +32,7 @@
        its own process and locks it until shutdown. -->
   <UsingTask
     TaskName="AN.CodeAnalyzers.StableABIVerification.StableABIVerifyTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll"
+    AssemblyFile="$(ANCodeAnalyzersTaskDir)StableABIVerification.dll"
     TaskFactory="TaskHostFactory" />
 
   <!-- Snapshot filename: $(AssemblyName).stableapi next to the .csproj -->
@@ -69,7 +78,7 @@
 
   <UsingTask
     TaskName="AN.CodeAnalyzers.VerifyUserConfigGitignore.VerifyUserConfigGitignoreTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll"
+    AssemblyFile="$(ANCodeAnalyzersTaskDir)VerifyUserConfigGitignore.dll"
     TaskFactory="TaskHostFactory" />
 
   <!-- Default severity to error if not specified -->

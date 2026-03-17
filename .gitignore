@@ -35,6 +35,9 @@ Desktop.ini
 # Test results
 TestResults/
 
+# Local build number (per-developer, not committed)
+buildnum.txt
+
 # User-config files — intentionally not committed (see README.md)
 # These are per-developer local customization files
 Directory.Build.props

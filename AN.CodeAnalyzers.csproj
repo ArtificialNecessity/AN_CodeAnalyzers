@@ -9,11 +9,23 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**</DefaultItemExcludes>
 
     <!-- Package properties -->
-    <PackageId>AN.CodeAnalyzers</PackageId>
-    <Version>1.0.0</Version>
+    <PackageId>ArtificialNecessity.CodeAnalyzers</PackageId>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Authors>David Jeske</Authors>
+    <Description>C# code analyzers for preventing silent binary compatibility breaks in C# projects (guardrails for humans and AI). Includes ExplicitEnums (AN0001), PublicConstAnalyzer (AN0002), StableABI snapshot verification, and VerifyUserConfigGitignore MSBuild tasks.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>roslyn;analyzer;code-analysis;binary-compatibility;enum;const;abi;stable-api</PackageTags>
     <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+    <!-- Local NuGet feed: set LOCAL_NUGET_REPO env var to enable auto-deploy -->
+    <LocalNuGetFeedPath>$(LOCAL_NUGET_REPO)</LocalNuGetFeedPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,10 +34,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pack README.md for NuGet.org package page -->
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <!-- Pack the analyzer DLL in the analyzers/dotnet/cs directory -->
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <!-- Pack the .targets file so consuming projects get MSBuild targets automatically -->
-    <None Include="build\AN.CodeAnalyzers.targets" Pack="true" PackagePath="build" Visible="false" />
+    <None Include="build\ArtificialNecessity.CodeAnalyzers.targets" Pack="true" PackagePath="build" Visible="false" />
     <!-- Pack the StableABI MSBuild task DLL in the tasks/ directory -->
     <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll')" />
@@ -33,5 +47,47 @@
     <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll')" />
   </ItemGroup>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       Git-height versioning: {VersionPrefix}-{GitHeight}.{BuildNum}.g{GitHash}
+       Example: 0.1.0-42.3.ga121087c
+       BuildNum auto-increments on every build via buildnum.txt
+       ════════════════════════════════════════════════════════════════ -->
+
+  <!-- Increment buildnum.txt before computing the version (skip if Version explicitly set) -->
+  <Target Name="IncrementBuildNumber" BeforeTargets="ComputeGitVersion" Condition="'$(Version)' == ''">
+    <ReadLinesFromFile File="$(MSBuildProjectDirectory)\buildnum.txt" Condition="Exists('$(MSBuildProjectDirectory)\buildnum.txt')">
+      <Output TaskParameter="Lines" PropertyName="PreviousBuildNumber" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <PreviousBuildNumber Condition="'$(PreviousBuildNumber)' == ''">0</PreviousBuildNumber>
+      <LocalBuildNumber>$([MSBuild]::Add($(PreviousBuildNumber), 1))</LocalBuildNumber>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)\buildnum.txt" Lines="$(LocalBuildNumber)" Overwrite="true" />
+  </Target>
+
+  <Target Name="ComputeGitVersion" BeforeTargets="GenerateNuspecDependencies;GetPackageVersionInfo;Pack;GenerateAssemblyInfo" Condition="'$(Version)' == ''">
+    <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHeight" />
+    </Exec>
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitShortHash" />
+    </Exec>
+    <PropertyGroup>
+      <Version>$(VersionPrefix)-$(GitCommitHeight).$(LocalBuildNumber).g$(GitShortHash)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+    <Message Importance="High" Text="AN.CodeAnalyzers version: $(Version)" />
+  </Target>
+
+  <!-- Deploy .nupkg to local NuGet feed after pack -->
+  <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != ''">
+    <MakeDir Directories="$(LocalNuGetFeedPath)" Condition="!Exists('$(LocalNuGetFeedPath)')" />
+    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+          DestinationFolder="$(LocalNuGetFeedPath)"
+          OverwriteReadOnlyFiles="true" />
+    <Message Importance="High" Text="AN.CodeAnalyzers: Deployed $(PackageId).$(PackageVersion).nupkg to $(LocalNuGetFeedPath)" />
+  </Target>
 
 </Project>
