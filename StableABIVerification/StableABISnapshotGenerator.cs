@@ -54,7 +54,7 @@ namespace AN.CodeAnalyzers.StableABIVerification
                     continue;
                 }
 
-                if (!typeMatchesScope(typeDefinition, snapshotScope))
+                if (!typeMatchesScope(typeDefinition, snapshotScope, metadataReader))
                 {
                     continue;
                 }
@@ -158,15 +158,36 @@ namespace AN.CodeAnalyzers.StableABIVerification
         // Scope filtering
         // ──────────────────────────────────────────────
 
-        private static bool typeMatchesScope(TypeDefinition typeDefinition, string snapshotScope)
+        private static bool typeMatchesScope(TypeDefinition typeDefinition, string snapshotScope, MetadataReader metadataReader)
         {
-            if (snapshotScope == "all")
-            {
+            if (snapshotScope == "all") {
                 return true;
             }
 
+            return isTypePubliclyVisible(typeDefinition, metadataReader);
+        }
+
+        /// <summary>
+        /// Checks whether a type is publicly visible to assembly consumers.
+        /// For nested types, walks the entire declaring type chain — a NestedPublic type
+        /// inside an internal class is NOT publicly visible.
+        /// </summary>
+        private static bool isTypePubliclyVisible(TypeDefinition typeDefinition, MetadataReader metadataReader)
+        {
             var visibility = typeDefinition.Attributes & TypeAttributes.VisibilityMask;
-            return visibility == TypeAttributes.Public || visibility == TypeAttributes.NestedPublic;
+
+            if (typeDefinition.IsNested) {
+                // Nested type must be NestedPublic
+                if (visibility != TypeAttributes.NestedPublic) {
+                    return false;
+                }
+                // Walk up: declaring type must also be publicly visible
+                var declaringTypeHandle = typeDefinition.GetDeclaringType();
+                var declaringTypeDefinition = metadataReader.GetTypeDefinition(declaringTypeHandle);
+                return isTypePubliclyVisible(declaringTypeDefinition, metadataReader);
+            }
+
+            return visibility == TypeAttributes.Public;
         }
 
         private static bool fieldMatchesScope(FieldDefinition fieldDefinition, string snapshotScope)

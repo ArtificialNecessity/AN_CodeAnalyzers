@@ -65,4 +65,41 @@
       GenerateMode="true" />
   </Target>
 
+  <!-- ════════════════════════════════════════════════════════════════
+       VerifyUserConfigGitignore (MSBuild Task - Out-of-Process)
+       
+       Verifies that user-config files are properly gitignored to prevent
+       accidental commits of per-developer configuration.
+       
+       Enable: <VerifyUserConfigGitignore>true</VerifyUserConfigGitignore>
+       Severity: <VerifyUserConfigGitignoreSeverity>warning</VerifyUserConfigGitignoreSeverity>
+       ════════════════════════════════════════════════════════════════ -->
+
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.VerifyUserConfigGitignore.VerifyUserConfigGitignoreTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll"
+    TaskFactory="TaskHostFactory"
+    Condition="Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll')" />
+  
+  <!-- Fallback for local development (load from bin directory) -->
+  <UsingTask
+    TaskName="AN.CodeAnalyzers.VerifyUserConfigGitignore.VerifyUserConfigGitignoreTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll"
+    TaskFactory="TaskHostFactory"
+    Condition="!Exists('$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\VerifyUserConfigGitignore.dll')" />
+
+  <!-- Default severity to error if not specified -->
+  <PropertyGroup>
+    <VerifyUserConfigGitignoreSeverity Condition="'$(VerifyUserConfigGitignoreSeverity)' == ''">error</VerifyUserConfigGitignoreSeverity>
+  </PropertyGroup>
+
+  <!-- Run verification before build when enabled -->
+  <Target Name="VerifyUserConfigGitignore"
+          BeforeTargets="Build"
+          Condition="'$(VerifyUserConfigGitignore)' == 'true'">
+    <VerifyUserConfigGitignoreTask
+      ProjectDirectory="$(MSBuildProjectDirectory)"
+      Severity="$(VerifyUserConfigGitignoreSeverity)" />
+  </Target>
+
 </Project>

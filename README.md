@@ -12,6 +12,7 @@ Roslyn code analyzers for preventing silent binary compatibility breaks in C# pr
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
+| **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration. |
 
 ## Installation
 
@@ -140,6 +141,48 @@ An MSBuild task that maintains a `$(AssemblyName).stableapi` file (e.g. `MyLibra
      REMOVED: const.MyClass.OldValue: int 7
    ```
 5. To accept intentional changes: `dotnet msbuild -t:UpdateStableABISnapshot`
+
+### VerifyUserConfigGitignore
+
+An MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration files.
+
+**Enable** in your `.csproj`:
+
+```xml
+<PropertyGroup>
+  <VerifyUserConfigGitignore>true</VerifyUserConfigGitignore>
+</PropertyGroup>
+```
+
+**Files verified** (hardcoded list):
+- `Directory.Build.props` — per-developer build customization
+- `Directory.Build.targets` — per-developer build targets
+- `Directory.Packages.props` — central package management
+- `global.json` — SDK version pinning
+- `nuget.config` — NuGet feed configuration
+- `.editorconfig` — editor preferences
+
+**Severity control** (optional):
+
+```xml
+<PropertyGroup>
+  <VerifyUserConfigGitignoreSeverity>warning</VerifyUserConfigGitignoreSeverity>
+</PropertyGroup>
+```
+
+| Value | Behavior |
+|---|---|
+| `error` | Build errors (default) — build fails if files not ignored |
+| `warning` | Build warnings — build continues |
+
+**Example error output:**
+
+```
+VerifyUserConfigGitignore: 2 file(s) not covered by .gitignore.
+  NOT IGNORED: Directory.Build.targets
+  NOT IGNORED: global.json
+Add these entries to your .gitignore to prevent accidental commits of local configuration.
+```
 
 ## Building
 

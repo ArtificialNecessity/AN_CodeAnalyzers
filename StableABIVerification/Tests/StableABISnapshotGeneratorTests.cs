@@ -92,6 +92,49 @@ internal enum InternalFormat
             Assert.Contains("enum.InternalFormat.A: 1", snapshotContent);
         }
 
+        [Fact]
+        public void NestedPublicEnumInsideInternalClass_ExcludedFromPublicScope()
+        {
+            string snapshotContent = generateSnapshotFromSource(@"
+internal class InternalContainer
+{
+    public enum PublicNestedStatus
+    {
+        Active = 1,
+        Inactive = 2
+    }
+
+    public const int PublicNestedConst = 42;
+    public static readonly int PublicNestedField = 99;
+}", "public");
+
+            // Nothing from InternalContainer should appear — it's internal,
+            // so its public members are NOT visible to assembly consumers
+            Assert.DoesNotContain("InternalContainer", snapshotContent);
+            Assert.DoesNotContain("PublicNestedStatus", snapshotContent);
+            Assert.DoesNotContain("PublicNestedConst", snapshotContent);
+            Assert.DoesNotContain("PublicNestedField", snapshotContent);
+        }
+
+        [Fact]
+        public void NestedPublicEnumInsidePublicClass_IncludedInPublicScope()
+        {
+            string snapshotContent = generateSnapshotFromSource(@"
+public class PublicContainer
+{
+    public enum NestedStatus
+    {
+        Active = 1,
+        Inactive = 2
+    }
+}", "public");
+
+            // Nested public enum inside public class IS visible to consumers
+            Assert.Contains("enum.PublicContainer.NestedStatus._type: int", snapshotContent);
+            Assert.Contains("enum.PublicContainer.NestedStatus.Active: 1", snapshotContent);
+            Assert.Contains("enum.PublicContainer.NestedStatus.Inactive: 2", snapshotContent);
+        }
+
         // ──────────────────────────────────────────────
         // Const snapshot generation
         // ──────────────────────────────────────────────

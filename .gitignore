@@ -34,5 +34,11 @@ Desktop.ini
 # Test results
 TestResults/
 
-# Directory.Build.props is intentionally not committed — see README.md
+# User-config files — intentionally not committed (see README.md)
+# These are per-developer local customization files
 Directory.Build.props
+Directory.Build.targets
+Directory.Packages.props
+global.json
+nuget.config
+.editorconfig

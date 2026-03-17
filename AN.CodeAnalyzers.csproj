@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsRoslynComponent>true</IsRoslynComponent>
-    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**</DefaultItemExcludes>
 
     <!-- Package properties -->
     <PackageId>AN.CodeAnalyzers</PackageId>
@@ -29,6 +29,9 @@
     <!-- Pack the StableABI MSBuild task DLL in the tasks/ directory -->
     <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\StableABIVerification.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('StableABIVerification\bin\$(Configuration)\netstandard2.0\System.Reflection.Metadata.dll')" />
+    <!-- Pack the VerifyUserConfigGitignore MSBuild task DLL in the tasks/ directory -->
+    <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\VerifyUserConfigGitignore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
+    <None Include="VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('VerifyUserConfigGitignore\bin\$(Configuration)\netstandard2.0\MAB.DotIgnore.dll')" />
   </ItemGroup>
 
 </Project>
