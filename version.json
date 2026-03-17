@@ -2,5 +2,5 @@
   // AN.CodeAnalyzers version configuration
   // Used by ComputeGitVersion target to compute package version
   "version": "0.1",
-  "buildNumberOffset": 12
+  "buildNumberOffset": 13
 }
