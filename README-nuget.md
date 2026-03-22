@@ -2,15 +2,17 @@
 
 Roslyn code analyzers and MSBuild tools for preventing silent binary compatibility breaks in C# projects.
 
+[Discussions at Github](https://github.com/ArtificialNecessity/AN_CodeAnalyzers/discussions/)
+
 ## Analyzer Summary
 
-| Verifier                        | Rule   | Description                                                                                                                                                                         |
-| ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
-| **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
-| **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
-| **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration. |
-| **JsonPeek** | —     | MSBuild task + standalone CLI tool that reads and writes individual values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic. |
+| Verifier                            | Rule   | Description                                                                                                                                                                                    |
+| ----------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ExplicitEnums**             | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                              |
+| **PublicConstAnalyzer**       | AN0002 | Warning:`public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                              |
+| **StableABIVerification**     | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
+| **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration.                                                   |
+| **JsonPeek**                  | —     | MSBuild task + standalone CLI tool that reads and writes individual values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic.                                          |
 
 ## Installation
 
@@ -121,6 +123,7 @@ An MSBuild pre-build task that verifies user-config files are properly gitignore
 ```
 
 **Files verified** (hardcoded list):
+
 - `Directory.Build.props` — per-developer build customization
 - `Directory.Build.targets` — per-developer build targets
 - `Directory.Packages.props` — central package management
@@ -136,10 +139,10 @@ An MSBuild pre-build task that verifies user-config files are properly gitignore
 </PropertyGroup>
 ```
 
-| Value | Behavior |
-|---|---|
-| `error` | Build errors (default) — build fails if files not ignored |
-| `warning` | Build warnings — build continues |
+| Value       | Behavior                                                   |
+| ----------- | ---------------------------------------------------------- |
+| `error`   | Build errors (default) — build fails if files not ignored |
+| `warning` | Build warnings — build continues                          |
 
 **Example error output:**
 
@@ -184,17 +187,18 @@ JsonPeek config.hjson database.host
 ```
 
 **Supported formats** (detected by content, not extension):
+
 - **JSON** — standard `{ "key": "value" }`
 - **JSONC** — JSON with `//` and `/* */` comments
 - **HJSON** — Human JSON: unquoted keys/values, comments, multiline strings
 
 **Task parameters:**
 
-| Parameter | Direction | Description |
-|---|---|---|
-| `File` | Input (required) | Path to the JSON/JSONC/HJSON file |
-| `KeyPath` | Input (required) | Dot-separated key path (e.g. `version` or `parent.child.key`) |
-| `Value` | Output | The extracted value as a string |
+| Parameter   | Direction        | Description                                                      |
+| ----------- | ---------------- | ---------------------------------------------------------------- |
+| `File`    | Input (required) | Path to the JSON/JSONC/HJSON file                                |
+| `KeyPath` | Input (required) | Dot-separated key path (e.g.`version` or `parent.child.key`) |
+| `Value`   | Output           | The extracted value as a string                                  |
 
 ## License
 
