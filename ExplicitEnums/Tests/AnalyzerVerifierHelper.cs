@@ -33,7 +33,7 @@ namespace AN.CodeAnalyzers.ExplicitEnums
         /// </summary>
         public static CSharpAnalyzerTest<ExplicitEnumValuesAnalyzer, DefaultVerifier> CreateNoDiagnosticsTest(
             string sourceCode,
-            string enforcementScope = "public")
+            string enforcementScope = "none")
         {
             var analyzerTest = new CSharpAnalyzerTest<ExplicitEnumValuesAnalyzer, DefaultVerifier>
             {
@@ -53,7 +53,7 @@ namespace AN.CodeAnalyzers.ExplicitEnums
         public static CSharpAnalyzerTest<ExplicitEnumValuesAnalyzer, DefaultVerifier> CreateDiagnosticsTest(
             string sourceCode,
             DiagnosticResult[] expectedDiagnostics,
-            string enforcementScope = "public")
+            string enforcementScope = "none")
         {
             var analyzerTest = new CSharpAnalyzerTest<ExplicitEnumValuesAnalyzer, DefaultVerifier>
             {

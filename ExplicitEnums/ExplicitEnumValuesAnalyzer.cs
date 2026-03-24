@@ -39,24 +39,28 @@ namespace AN.CodeAnalyzers.ExplicitEnums
             var enumMemberDeclarationSyntax = (EnumMemberDeclarationSyntax)syntaxNodeAnalysisContext.Node;
 
             // Check if member already has an explicit value
-            if (enumMemberDeclarationSyntax.EqualsValue != null) {
+            if (enumMemberDeclarationSyntax.EqualsValue != null)
+            {
                 return;
             }
 
             // Get the containing enum declaration
             var enumDeclarationSyntax = enumMemberDeclarationSyntax.Parent as EnumDeclarationSyntax;
-            if (enumDeclarationSyntax == null) {
+            if (enumDeclarationSyntax == null)
+            {
                 return;
             }
 
             // Check if enum has the suppression attribute
             var enumSymbol = syntaxNodeAnalysisContext.SemanticModel.GetDeclaredSymbol(enumDeclarationSyntax);
-            if (enumSymbol == null) {
+            if (enumSymbol == null)
+            {
                 return;
             }
 
             // Check if enum has the suppression attribute (takes precedence)
-            if (hasSuppressAttribute(enumSymbol)) {
+            if (hasSuppressAttribute(enumSymbol))
+            {
                 return;
             }
 
@@ -67,7 +71,8 @@ namespace AN.CodeAnalyzers.ExplicitEnums
             var enforcementScope = getEnforcementScope(syntaxNodeAnalysisContext);
 
             // Check if we should enforce based on the scope setting or require attribute
-            if (!hasRequireAttribute && !shouldEnforce(enforcementScope, enumSymbol.DeclaredAccessibility)) {
+            if (!hasRequireAttribute && !shouldEnforce(enforcementScope, enumSymbol.DeclaredAccessibility))
+            {
                 return;
             }
 
@@ -99,18 +104,26 @@ namespace AN.CodeAnalyzers.ExplicitEnums
             var options = syntaxNodeAnalysisContext.Options.AnalyzerConfigOptionsProvider.GetOptions(syntaxNodeAnalysisContext.Node.SyntaxTree);
 
             if (options.TryGetValue("build_property.EnforceExplicitEnumValues", out var scopeValue)
-                && !string.IsNullOrEmpty(scopeValue)) {
+                && !string.IsNullOrEmpty(scopeValue))
+            {
                 return scopeValue.ToLowerInvariant();
             }
 
-            // Default must always remain "public" — public enums are the ones that break
-            // binary compatibility in shipped DLLs when their values silently shift.
-            return "public";
+            // Default is "none" — the user must explicitly enable enforcement via
+            // <EnforceExplicitEnumValues>public|all|explicit</EnforceExplicitEnumValues>
+            // in their .csproj when consuming this analyzer as a NuGet package.
+            // THis is because we have multiple analyzers in the same package and we 
+            // don't want to annoy the user by turning on something they dont want...
+            // and also because the StableABI system WILL catch enum changes, so 
+            // requiring explicit enums in the code is a code style choice, not a
+            // stability requirement.            
+            return "none";
         }
 
         private bool shouldEnforce(string enforcementScope, Accessibility enumAccessibility)
         {
-            switch (enforcementScope) {
+            switch (enforcementScope)
+            {
                 case "all":
                     return true;
 

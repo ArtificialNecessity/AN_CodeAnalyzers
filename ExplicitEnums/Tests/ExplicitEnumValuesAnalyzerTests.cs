@@ -7,11 +7,11 @@ namespace AN.CodeAnalyzers.Tests.ExplicitEnums
     public class ExplicitEnumValuesAnalyzerTests
     {
         // ──────────────────────────────────────────────
-        // Default scope ("public") — public enums flagged
+        // Scope "public" — public enums flagged
         // ──────────────────────────────────────────────
 
         [Fact]
-        public async Task PublicEnum_WithoutExplicitValues_ReportsDiagnostic()
+        public async Task PublicEnum_WithoutExplicitValues_ReportsDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public enum {|#0:Color|}
@@ -27,13 +27,14 @@ public enum {|#0:Color|}
                     AnalyzerVerifierHelper.ExpectAN001(1, "Red"),
                     AnalyzerVerifierHelper.ExpectAN001(2, "Green"),
                     AnalyzerVerifierHelper.ExpectAN001(3, "Blue"),
-                });
+                },
+                enforcementScope: "public");
 
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task PublicEnum_WithExplicitValues_NoDiagnostic()
+        public async Task PublicEnum_WithExplicitValues_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public enum Color
@@ -42,12 +43,13 @@ public enum Color
     Green = 1,
     Blue = 2
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task PublicEnum_MixedValues_OnlyFlagsMissing()
+        public async Task PublicEnum_MixedValues_OnlyFlagsMissing_ScopePublic()
         {
             const string testSource = @"
 public enum Color
@@ -61,17 +63,18 @@ public enum Color
                 new[]
                 {
                     AnalyzerVerifierHelper.ExpectAN001(0, "Green"),
-                });
+                },
+                enforcementScope: "public");
 
             await analyzerTest.RunAsync();
         }
 
         // ──────────────────────────────────────────────
-        // Default scope ("public") — internal enums NOT flagged
+        // Scope "public" — internal enums NOT flagged
         // ──────────────────────────────────────────────
 
         [Fact]
-        public async Task InternalEnum_WithoutExplicitValues_NoDiagnostic_DefaultScope()
+        public async Task InternalEnum_WithoutExplicitValues_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 internal enum InternalColor
@@ -80,12 +83,13 @@ internal enum InternalColor
     Green,
     Blue
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task PrivateEnum_WithoutExplicitValues_NoDiagnostic_DefaultScope()
+        public async Task PrivateEnum_WithoutExplicitValues_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public class Outer
@@ -97,7 +101,8 @@ public class Outer
         Blue
     }
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
@@ -223,7 +228,7 @@ public enum Color
         // ──────────────────────────────────────────────
 
         [Fact]
-        public async Task PublicEnum_WithSuppressAttribute_NoDiagnostic()
+        public async Task PublicEnum_WithSuppressAttribute_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 using AN.CodeAnalyzers.ExplicitEnums;
@@ -235,7 +240,8 @@ public enum Color
     Green,
     Blue
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
@@ -318,7 +324,7 @@ internal enum InternalColor
         // ──────────────────────────────────────────────
 
         [Fact]
-        public async Task PublicEnum_WithBothAttributes_SuppressWins()
+        public async Task PublicEnum_WithBothAttributes_SuppressWins_ScopePublic()
         {
             const string testSource = @"
 using AN.CodeAnalyzers.ExplicitEnums;
@@ -331,7 +337,8 @@ public enum Color
     Green,
     Blue
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
@@ -340,30 +347,32 @@ public enum Color
         // ──────────────────────────────────────────────
 
         [Fact]
-        public async Task EmptyEnum_NoDiagnostic()
+        public async Task EmptyEnum_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public enum Empty
 {
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task SingleMember_WithExplicitValue_NoDiagnostic()
+        public async Task SingleMember_WithExplicitValue_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public enum Single
 {
     Only = 42
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task SingleMember_WithoutExplicitValue_ReportsDiagnostic()
+        public async Task SingleMember_WithoutExplicitValue_ReportsDiagnostic_ScopePublic()
         {
             const string testSource = @"
 public enum Single
@@ -375,13 +384,14 @@ public enum Single
                 new[]
                 {
                     AnalyzerVerifierHelper.ExpectAN001(0, "Only"),
-                });
+                },
+                enforcementScope: "public");
 
             await analyzerTest.RunAsync();
         }
 
         [Fact]
-        public async Task FlagsEnum_WithExplicitValues_NoDiagnostic()
+        public async Task FlagsEnum_WithExplicitValues_NoDiagnostic_ScopePublic()
         {
             const string testSource = @"
 using System;
@@ -395,7 +405,8 @@ public enum Permissions
     Execute = 4,
     All = Read | Write | Execute
 }";
-            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            var analyzerTest = AnalyzerVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementScope: "public");
             await analyzerTest.RunAsync();
         }
     }
