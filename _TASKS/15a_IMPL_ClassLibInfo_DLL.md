@@ -9,12 +9,13 @@
 
 - [ ] Create `ClassLibInfo/ClassLibInfo.csproj` (netstandard2.0, MSBuild task library)
   - References: `Microsoft.Build.Utilities.Core`, `System.Reflection.Metadata`
-  - Pattern: matches `StableABIVerification/StableABIVerification.csproj`
-  - `DefaultItemExcludes` for `**/Tests/**`
-- [ ] Create `ClassLibInfo/ClassLibInfoTool/AN.CodeAnalyzers.ClassLibInfo.Tool.csproj` (net8.0 console app, AOT-publishable)
-  - References the ClassLibInfo library project
-  - Pattern: matches `CoreTools/JsonPeekTool/` structure
-  - Enable `PublishAot=true` for AOT standalone support
+  - Pattern: matches `StableABIVerification/StableABIVerification.csproj` and `CoreTools/CoreTools.csproj`
+  - `DefaultItemExcludes` for `**/Tests/**` and `**/ClassLibInfoTool/**`
+  - `CopyLocalLockFileAssemblies=true` (ensures SRM dll copied for NuGet packing)
+- [ ] Create `ClassLibInfo/ClassLibInfoTool/AN.CodeAnalyzers.ClassLibInfo.Tool.csproj` (net8.0 console exe)
+  - `ProjectReference` to `ClassLibInfo.csproj`
+  - Pattern: matches `CoreTools/JsonPeekTool/AN.CodeAnalyzers.JsonPeek.Tool.csproj`
+  - `AssemblyName=ClassLibInfo`, `IsPackable=false`
 - [ ] Create `ClassLibInfo/Tests/AN.CodeAnalyzers.ClassLibInfo.Tests.csproj` (net8.0 test project)
 - [ ] Add all three projects to `AN_CodeAnalyzers.sln`
 - [ ] Add `ClassLibInfo/**` to `DefaultItemExcludes` in `AN.CodeAnalyzers.csproj`
@@ -31,6 +32,11 @@
   - `TypeSpecificationHandle` → generic instantiations, arrays, pointers, byrefs
   - `GenericTypeParameter` / `GenericMethodParameter` → resolve actual names from `GenericParameterHandle` table (not just `!0`, `!!0`)
   - Nested types → `Outer.Inner`
+- [ ] Implement `NullableAttribute` / `NullableContextAttribute` decoding (core, not optional)
+  - Read the byte-array encoding from custom attributes on types, methods, parameters
+  - Walk the type tree in the same order as the signature decoder to apply `?` suffixes
+  - Handle `NullableContextAttribute` (type-level default) vs per-member `NullableAttribute` overrides
+  - This must be built into the signature decoder from the start — retrofitting is much harder because the nullability byte array indexing must walk the type tree in sync with signature decoding
 - [ ] Implement type walking: `TypeDefinitionHandle` table iteration
   - Skip `<Module>`, compiler-generated types (`<>c`, display classes)
   - Scope filtering: public-only for NuGet DLLs, all for `--visibility all`
@@ -54,20 +60,23 @@
   - Delegates: `delegate ReturnType Name(params...)`
   - Operators: `static bool operator ==(Foo left, Foo right)`
   - Implicit/explicit conversions: `static implicit operator int(Foo value)`
-  - Extension methods: `extension` prefix with `this` parameter type
+  - Extension methods: `ext` prefix with `this` parameter type (NOT `extension` — avoids collision with C# 14 `extension` keyword for extension types)
 - [ ] Implement modifier keywords: `static`, `abstract`, `virtual`, `override`, `sealed`, `readonly`, `async`
 - [ ] Implement skip rules:
   - Compiler-generated members (`<>c`, `<Clone>$`, backing fields)
   - `System.Object` inherited members unless overridden
   - Explicit interface implementations
   - Assembly-level attributes, module initializers
+  - Record-specific compiler goo: skip `PrintMembers`, `EqualityContract`, `<Clone>$`
+  - Record-specific real API: KEEP positional properties, `Deconstruct`, equality operators
 
 ## Phase 3 — Doc Comments Extraction
 
 - [ ] Implement XML doc comment extraction from `.xml` sidecar files
   - Look for `{AssemblyName}.xml` next to the DLL
   - Parse `<member name="M:Namespace.Type.Method">` entries
-  - Match to extracted symbols by member documentation ID
+  - Build doc comment member IDs from SRM metadata to match against XML entries
+  - NOTE: XML doc IDs use backtick notation for generics (`Where``1`) and double-backtick for method type arity — this encoding differs from display format and must be carefully constructed from the metadata
 - [ ] Implement `--doc-comments` modes:
   - `none` — no doc comments in output
   - `brief` — first N characters of `<summary>` (configurable N, default ~120)
@@ -76,36 +85,48 @@
 
 ## Phase 4 — CLI Tool (`ClassLibInfoTool/`)
 
-- [ ] Create `ClassLibInfo_Program.cs` — CLI entry point
+- [ ] Create `ClassLibInfo_Program.cs` — CLI entry point (pattern: `CoreTools/JsonPeekTool/JsonPeek_Program.cs`)
 - [ ] Implement single-DLL mode: `ClassLibInfo <input.dll> <output.api.txt> [options]`
   - `--visibility public|all` (default: public)
   - `--doc-comments none|brief|full` (default: brief)
+- [ ] Implement batch mode: `ClassLibInfo --batch <manifest.txt> --output <dir> [options]`
+  - Manifest format: `<dll-path>\t<PackageId>\t<PackageVersion>` (one per line)
+  - MSBuild target writes the manifest, invokes CLI once — avoids 40+ process spawns for large projects
+  - Skip entries where `<output>/<PackageId>.<PackageVersion>.api.txt` already exists (cache hit)
 - [ ] Implement project mode: `ClassLibInfo --project <path.csproj> --output <dir> [options]`
   - Run `dotnet msbuild <path.csproj> -getProperty:TargetPath` to find compiled DLL
   - Run `dotnet msbuild <path.csproj> -getItem:ReferencePath` to find NuGet DLL paths with package metadata
-  - Extract each NuGet dependency, skip if cached (keyed on `{PackageId}.{PackageVersion}`)
+  - Build manifest internally, then process as batch
   - Write to `<output>/nuget/{PackageId}.{PackageVersion}.api.txt`
   - Write project output to `<output>/src/{AssemblyName}.api.txt`
 - [ ] Implement `--include-transitive` flag (default: direct deps only)
 - [ ] Implement `--framework <tfm>` for multi-targeting projects
-- [ ] Generate `_index.txt` manifest listing all dumped files
-- [ ] Ensure AOT compatibility (no reflection, no dynamic loading)
+- [ ] Generate `_index.txt` manifest with machine-parseable header:
+  ```
+  # ClassLibInfo index — generated 2026-03-25T14:30:00Z
+  # Project: MyProject (net8.0)
+  nuget/Newtonsoft.Json.13.0.3.api.txt  PackageId=Newtonsoft.Json  Version=13.0.3
+  nuget/System.Collections.Immutable.8.0.0.api.txt  PackageId=System.Collections.Immutable  Version=8.0.0
+  src/MyProject.api.txt  AssemblyName=MyProject  Generated=2026-03-25T14:30:00Z
+  ```
 
 ## Phase 5 — MSBuild Task Integration
 
-- [ ] Create `ClassLibInfo/ClassLibInfoTask.cs` — MSBuild Task class
+- [ ] Create `ClassLibInfo/ClassLibInfoDllTask.cs` — MSBuild Task class
   - Input: `ProjectDirectory`, `OutputDirectory`, `Scope`, `DocComments`, `IncludeTransitive`
   - Uses `TaskHostFactory` for out-of-process execution (matches existing pattern)
+  - Builds manifest from `@(ReferencePath)` items with `NuGetPackageId`/`NuGetPackageVersion` metadata
+  - Invokes `ApiDumpGenerator` directly (in-process via task DLL, not shelling out to CLI)
 - [ ] Add `UsingTask` and targets to `build/ArtificialNecessity.CodeAnalyzers.targets`:
   - `ClassLibInfoEnabled` property (default: false)
   - `ClassLibInfoOutputDir` property (default: `$(SolutionDir)ClassLibInfo` or `$(MSBuildProjectDirectory)\..\ClassLibInfo`)
   - `ClassLibInfoDocComments` property (default: brief)
-  - Post-build target `DumpClassLibInfo` that runs after Build
+  - Post-build target `DumpClassLibInfo` that runs `AfterTargets="Build"`
   - Caching: skip NuGet DLLs where `.api.txt` already exists with matching version
 - [ ] Add pack items to `AN.CodeAnalyzers.csproj`:
-  - Task DLL → `tasks/netstandard2.0/`
-  - CLI tool → `tools/net8.0/any/`
-  - `System.Reflection.Metadata.dll` dependency
+  - ClassLibInfo task DLL → `tasks/netstandard2.0/`
+  - ClassLibInfo CLI tool exe + deps → `tools/net8.0/any/`
+  - `System.Reflection.Metadata.dll` dependency (if not already packed from StableABI)
 
 ## Phase 6 — Tests
 
@@ -113,17 +134,21 @@
   - Compile small test assemblies in-memory or from embedded resources
   - Verify output format for: classes, interfaces, structs, enums, delegates
   - Verify generic types with constraints
+  - Verify nullable annotations (`string` vs `string?`, `T?`, `IList<string?>?`)
   - Verify properties, events, indexers, operators
-  - Verify extension methods get `extension` prefix
+  - Verify extension methods get `ext` prefix
   - Verify `[Flags]` and `[Obsolete]` markers
   - Verify compiler-generated members are skipped
+  - Verify record types: `PrintMembers`/`EqualityContract` skipped, positional props/`Deconstruct` kept
   - Verify `System.Object` members skipped unless overridden
   - Verify namespace grouping and indentation
   - Verify visibility filtering (public vs all)
 - [ ] Unit tests for doc comment extraction:
   - Verify XML sidecar parsing
+  - Verify doc comment ID construction (especially generics with backtick notation)
   - Verify brief/full/none modes
 - [ ] Integration test: run CLI on a known DLL, snapshot-compare output
+- [ ] Integration test: run batch mode with manifest file
 - [ ] Integration test: run project mode on a test .csproj
 
 ## Phase 7 — Documentation
