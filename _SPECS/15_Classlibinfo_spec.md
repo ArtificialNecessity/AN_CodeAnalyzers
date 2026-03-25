@@ -388,7 +388,9 @@ Show as: `static implicit operator int(Foo value)` / `static explicit operator F
 
 ## Open Questions
 
-1. **Should we dump XML doc comments?** The `<summary>` tag would give the AI semantic context, but dramatically increases file size. Could offer a `--include-docs` flag with a one-line-summary extraction mode.
+1. **~~Should we dump XML doc comments?~~** **YES — with a flag.** Support extracting `<summary>` doc comments via `--doc-comments` [none, brief, full] flag (default: on). Options to include non,  full-comments or brief N-prefix characters of each doc tag.  
+
+   **Important caveat:** For source projects we compile ourselves, doc comments are NOT the code and can be wrong or stale. The more reliable approach for own-project source is to point at `file:line` and let the AI read the actual source code if it wants context. Doc comments are most valuable for **NuGet/external DLLs** where the AI cannot read the source — the XML docs embedded in the DLL (or shipped as `.xml` sidecar files) are the only semantic context available.
 
 2. **Should `ClassLibInfo/` be workspace-root or solution-root?** For multi-project solutions, workspace root makes sense. For single-project repos, they're the same. Default to `$(SolutionDir)` if available, fall back to `$(MSBuildProjectDirectory)/..`.
 
