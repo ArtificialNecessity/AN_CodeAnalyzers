@@ -17,6 +17,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
     {
         /// <summary>"public" for public types only, "all" for all types.</summary>
         public string VisibilityScope { get; set; } = "public";
+
+        /// <summary>"hjson" for structured HJSON, "flat" for keyword-prefixed text.</summary>
+        public string OutputFormat { get; set; } = "hjson";
     }
 
     /// <summary>
@@ -41,9 +44,23 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             var metadataReader = peReader.GetMetadataReader();
 
             // Collect all types grouped by namespace
-            var typesByNamespace = collectTypesByNamespace(metadataReader, dumpOptions);
+            var collectedTypes = collectTypesByNamespace(metadataReader, dumpOptions);
+
+            // Route to flat text formatter if requested
+            if (dumpOptions.OutputFormat == "flat") {
+                var flatTypes = new Dictionary<string, List<FlatTypeInfo>>(StringComparer.Ordinal);
+                foreach (var kvp in collectedTypes) {
+                    var flatList = new List<FlatTypeInfo>();
+                    foreach (var ct in kvp.Value) {
+                        flatList.Add(new FlatTypeInfo { Handle = ct.Handle, TypeName = ct.TypeName, NamespaceName = ct.NamespaceName });
+                    }
+                    flatTypes[kvp.Key] = flatList;
+                }
+                return FlatTextFormatter.Format(metadataReader, flatTypes, dumpOptions);
+            }
 
             // Build HJSON output
+            var typesByNamespace = collectedTypes;
             var hjsonBuilder = new StringBuilder();
             hjsonBuilder.AppendLine("{");
 

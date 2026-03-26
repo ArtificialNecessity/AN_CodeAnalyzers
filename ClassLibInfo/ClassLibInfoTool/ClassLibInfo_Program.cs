@@ -16,6 +16,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo.Tool
 
             string inputDllPath = commandLineArgs[0];
             string visibilityScope = "public";
+            string outputFormat = "hjson";
             string? outputFilePath = null;
 
             // Parse optional args
@@ -26,13 +27,20 @@ namespace AN.CodeAnalyzers.ClassLibInfo.Tool
                 {
                     visibilityScope = commandLineArgs[++argIndex];
                 }
+                else if (currentArg == "--format" && argIndex + 1 < commandLineArgs.Length)
+                {
+                    outputFormat = commandLineArgs[++argIndex];
+                }
                 else if (outputFilePath == null)
                 {
                     outputFilePath = currentArg;
                 }
             }
 
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = visibilityScope };
+            var dumpOptions = new ApiDumpOptions {
+                VisibilityScope = visibilityScope,
+                OutputFormat = outputFormat
+            };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(inputDllPath, dumpOptions);
 
             if (outputFilePath != null)
