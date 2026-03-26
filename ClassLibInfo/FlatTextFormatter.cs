@@ -21,7 +21,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
         public static string Format(
             MetadataReader metadataReader,
             Dictionary<string, List<FlatTypeInfo>> typesByNamespace,
-            ApiDumpOptions dumpOptions)
+            ApiDumpOptions dumpOptions,
+            XmlDocCommentReader? docCommentReader = null)
         {
             var outputBuilder = new StringBuilder();
 
@@ -42,7 +43,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 typesInNamespace.Sort((a, b) => string.Compare(a.TypeName, b.TypeName, StringComparison.Ordinal));
 
                 foreach (var typeInfo in typesInNamespace) {
-                    emitFlatType(typeInfo, metadataReader, dumpOptions, outputBuilder, indent: 2);
+                    emitFlatType(typeInfo, metadataReader, dumpOptions, docCommentReader, outputBuilder, indent: 2);
                 }
 
                 outputBuilder.AppendLine();
@@ -55,6 +56,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             FlatTypeInfo typeInfo,
             MetadataReader metadataReader,
             ApiDumpOptions dumpOptions,
+            XmlDocCommentReader? docCommentReader,
             StringBuilder outputBuilder,
             int indent)
         {
@@ -94,6 +96,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 modifierList.Add("Obsolete");
             }
 
+            // Emit type-level doc comment
+            emitFlatDocComment(docCommentReader, XmlDocCommentReader.BuildTypeDocId(typeInfo.NamespaceName, typeInfo.TypeName), dumpOptions, outputBuilder, ind);
+
             outputBuilder.AppendLine($"{ind}{typeKind} {displayTypeName} [{string.Join(", ", modifierList)}]");
 
             var typeGenericContext = buildTypeGenericContext(typeDef, metadataReader);
@@ -102,7 +107,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             if (typeKind == "enum") {
                 emitFlatEnumMembers(typeDef, metadataReader, outputBuilder, memberInd);
             } else {
-                emitFlatTypeMembers(typeDef, typeGenericContext, metadataReader, dumpOptions, outputBuilder, memberInd);
+                emitFlatTypeMembers(typeDef, typeGenericContext, metadataReader, dumpOptions, docCommentReader, typeInfo.NamespaceName, typeInfo.TypeName, outputBuilder, memberInd);
             }
         }
 
@@ -132,6 +137,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             GenericContext typeGenericContext,
             MetadataReader metadataReader,
             ApiDumpOptions dumpOptions,
+            XmlDocCommentReader? docCommentReader,
+            string namespaceName,
+            string typeName,
             StringBuilder outputBuilder,
             string memberIndent)
         {
@@ -251,6 +259,24 @@ namespace AN.CodeAnalyzers.ClassLibInfo
         // ──────────────────────────────────────────────
         // Helpers (duplicated from ApiDumpGenerator to keep FlatTextFormatter self-contained)
         // ──────────────────────────────────────────────
+
+        private static void emitFlatDocComment(
+            XmlDocCommentReader? docCommentReader,
+            string memberDocId,
+            ApiDumpOptions dumpOptions,
+            StringBuilder outputBuilder,
+            string indentStr)
+        {
+            if (docCommentReader == null || dumpOptions.DocComments == "none") return;
+
+            string? summaryText = dumpOptions.DocComments == "brief"
+                ? docCommentReader.GetBriefSummary(memberDocId)
+                : docCommentReader.GetSummary(memberDocId);
+
+            if (!string.IsNullOrEmpty(summaryText)) {
+                outputBuilder.AppendLine($"{indentStr}// {summaryText}");
+            }
+        }
 
         private static string buildParamList(MethodDefinition methodDef, GenericContext genericContext, MetadataReader metadataReader)
         {

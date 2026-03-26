@@ -20,6 +20,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
         /// <summary>"hjson" for structured HJSON, "flat" for keyword-prefixed text.</summary>
         public string OutputFormat { get; set; } = "hjson";
+
+        /// <summary>"none" = no doc comments, "brief" = first ~120 chars, "full" = complete summary.</summary>
+        public string DocComments { get; set; } = "brief";
     }
 
     /// <summary>
@@ -43,6 +46,12 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             using var peReader = new PEReader(assemblyFileStream);
             var metadataReader = peReader.GetMetadataReader();
 
+            // Load XML doc sidecar if doc comments are requested
+            XmlDocCommentReader? docCommentReader = null;
+            if (dumpOptions.DocComments != "none") {
+                docCommentReader = XmlDocCommentReader.TryLoadForAssembly(assemblyFilePath);
+            }
+
             // Collect all types grouped by namespace
             var collectedTypes = collectTypesByNamespace(metadataReader, dumpOptions);
 
@@ -56,7 +65,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                     }
                     flatTypes[kvp.Key] = flatList;
                 }
-                return FlatTextFormatter.Format(metadataReader, flatTypes, dumpOptions);
+                return FlatTextFormatter.Format(metadataReader, flatTypes, dumpOptions, docCommentReader);
             }
 
             // Build HJSON output
@@ -84,7 +93,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
                 foreach (var typeInfo in typesInNamespace)
                 {
-                    emitType(typeInfo, metadataReader, dumpOptions, hjsonBuilder, indent: 4);
+                    emitType(typeInfo, metadataReader, dumpOptions, docCommentReader, hjsonBuilder, indent: 4);
                 }
 
                 hjsonBuilder.AppendLine("  }");
@@ -163,6 +172,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             CollectedTypeInfo typeInfo,
             MetadataReader metadataReader,
             ApiDumpOptions dumpOptions,
+            XmlDocCommentReader? docCommentReader,
             StringBuilder hjsonBuilder,
             int indent)
         {
@@ -225,6 +235,10 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             // Build generic context for this type
             var typeGenericContext = buildTypeGenericContext(typeDef, metadataReader);
 
+            // Emit type-level doc comment
+            string typeDocId = XmlDocCommentReader.BuildTypeDocId(typeInfo.NamespaceName, typeInfo.TypeName);
+            emitDocComment(docCommentReader, typeDocId, dumpOptions, hjsonBuilder, indentStr);
+
             hjsonBuilder.AppendLine($"{indentStr}{displayTypeName}: {{ {string.Join(", ", typeHeaderParts)}");
 
             // Emit members based on type kind
@@ -234,7 +248,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             }
             else
             {
-                emitTypeMembers(typeDef, typeGenericContext, metadataReader, dumpOptions, hjsonBuilder, indent + 2);
+                emitTypeMembers(typeDef, typeGenericContext, metadataReader, dumpOptions, docCommentReader, typeInfo.NamespaceName, typeInfo.TypeName, hjsonBuilder, indent + 2);
             }
 
             hjsonBuilder.AppendLine($"{indentStr}}}");
@@ -287,6 +301,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             GenericContext typeGenericContext,
             MetadataReader metadataReader,
             ApiDumpOptions dumpOptions,
+            XmlDocCommentReader? docCommentReader,
+            string namespaceName,
+            string typeName,
             StringBuilder hjsonBuilder,
             int indent)
         {
@@ -688,6 +705,27 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 return "\"" + typeName.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
             }
             return typeName;
+        }
+
+        /// <summary>
+        /// Emits a // doc comment line if a summary exists for the given member ID.
+        /// </summary>
+        private static void emitDocComment(
+            XmlDocCommentReader? docCommentReader,
+            string memberDocId,
+            ApiDumpOptions dumpOptions,
+            StringBuilder hjsonBuilder,
+            string indentStr)
+        {
+            if (docCommentReader == null || dumpOptions.DocComments == "none") return;
+
+            string? summaryText = dumpOptions.DocComments == "brief"
+                ? docCommentReader.GetBriefSummary(memberDocId)
+                : docCommentReader.GetSummary(memberDocId);
+
+            if (!string.IsNullOrEmpty(summaryText)) {
+                hjsonBuilder.AppendLine($"{indentStr}// {summaryText}");
+            }
         }
 
         private static bool isCompilerGenerated(string name)
