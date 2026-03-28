@@ -9,6 +9,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 
 | Verifier                        | Rule   | Description                                                                                                                                                                         |
 | ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
@@ -64,6 +65,28 @@ AN_CodeAnalyzers/
 - **The analyzer `.csproj`** uses `<DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**</DefaultItemExcludes>` to prevent test files from being compiled into the analyzer assembly.
 
 ## Analyzers
+
+### AN0100: Require typed pointers, not IntPtr
+
+`IntPtr` is not safe. It erases type information at the exact boundary where it matters most. The compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works.
+
+This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, and `nint`/`nuint` in P/Invoke declarations. There are no exceptions. Use typed structs for handles and `unsafe T*` for pointers.
+
+**Configuration** via MSBuild property:
+
+```xml
+<PropertyGroup>
+  <RequireTypedPointersNotIntPtr>warn</RequireTypedPointersNotIntPtr>
+</PropertyGroup>
+```
+
+| Value        | Behavior                                      |
+| ------------ | --------------------------------------------- |
+| `warn`     | Warning (default)                              |
+| `disallow` | Error — build fails on any IntPtr usage       |
+| `ignore`   | Disabled                                       |
+
+**Recommended project organization:** Isolate native interop type definitions in a small dedicated project with `<RequireTypedPointersNotIntPtr>ignore</RequireTypedPointersNotIntPtr>`, and set `disallow` or `warn` in all other projects. This forces all untyped pointer manipulation into a single, reviewable location.
 
 ### AN0001: Enum member must have explicit value
 
