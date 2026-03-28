@@ -4,6 +4,8 @@
   <ItemGroup>
     <!-- ExplicitEnums (AN0001) -->
     <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
+    <!-- RequireTypedPointersNotIntPtr (AN0100) -->
+    <CompilerVisibleProperty Include="RequireTypedPointersNotIntPtr" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
