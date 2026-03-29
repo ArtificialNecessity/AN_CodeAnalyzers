@@ -24,9 +24,9 @@ The metadata to detect all of this already exists in the PE file. Nobody wired u
 
 |                        |                                                         |
 | ---------------------- | ------------------------------------------------------- |
-| **Package**      | `AN.AssemblySafety`                                   |
-| **Target**       | net10.0                                                 |
-| **Dependencies** | `System.Reflection.Metadata` (ships with the runtime) |
+| **Package**      | `ArtificialNecessity.SaferAssemblyLoader`             |
+| **Target**       | netstandard2.0                                          |
+| **Dependencies** | `System.Reflection.Metadata` 7.0.0                   |
 | **Size**         | One file. Tiny.                                         |
 
 This is a standalone library. It does NOT depend on `AN.CodeAnalyzers`. It does NOT depend on Roslyn. You reference it in your runtime project and call it. That's it.
@@ -78,7 +78,7 @@ public static class AssemblyManagedOnly
 ## Exception
 
 ```csharp
-namespace ArtificialNecessity.AssemblySafety;
+namespace ArtificialNecessity.SaferAssemblyLoader;
 
 public class ManagedOnlyViolationException : Exception
 {
@@ -197,9 +197,9 @@ This is the gate that should have been a flag on `Assembly.LoadFrom` twenty-thre
 
 `AN.CodeAnalyzers` (AN0100, AN0101) enforces managed-only discipline at **build time** on source code you control.
 
-`AN.AssemblySafety` enforces managed-only discipline at **load time** on compiled assemblies you may not control.
+`ArtificialNecessity.SaferAssemblyLoader` enforces managed-only discipline at **load time** on compiled assemblies you may not control.
 
-They're complementary. Use both. But they ship separately — `AN.AssemblySafety` has no dependency on the analyzer package, Roslyn, or anything else heavy. It's one small DLL that reads PE metadata and makes a decision.
+They're complementary. Use both. But they ship separately — `ArtificialNecessity.SaferAssemblyLoader` has no dependency on the analyzer package, Roslyn, or anything else heavy. It's one small DLL that reads PE metadata and makes a decision.
 
 
 ## Future WOrk

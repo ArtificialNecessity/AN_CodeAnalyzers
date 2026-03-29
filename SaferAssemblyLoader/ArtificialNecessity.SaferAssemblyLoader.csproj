@@ -1,0 +1,122 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**</DefaultItemExcludes>
+
+    <!-- Output -->
+    <OutputType>Library</OutputType>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- Package properties -->
+    <PackageId>ArtificialNecessity.SaferAssemblyLoader</PackageId>
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <Authors>David Jeske</Authors>
+    <Description>Load .NET assemblies with a managed-only guarantee. Inspects PE metadata before loading — if the assembly contains DllImport, IntPtr, Marshal calls, or unsafe IL, it throws before the assembly enters your AppDomain.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ArtificialNecessity/AN_CodeAnalyzers</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>assembly-loading;security;managed-only;plugin-safety;pe-inspection</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+    <!-- Local NuGet feed: set LOCAL_NUGET_REPO env var to enable auto-deploy -->
+    <LocalNuGetFeedPath>$(LOCAL_NUGET_REPO)</LocalNuGetFeedPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.Metadata" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- Allow test project to access internal types -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AN.SaferAssemblyLoader.Tests" />
+  </ItemGroup>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       Version computation — shares version.json with AN.CodeAnalyzers.
+       Uses the JsonPeek CLI tool from the CoreTools project.
+       ════════════════════════════════════════════════════════════════ -->
+
+  <Target Name="GeneratePrereleaseVersion"
+          BeforeTargets="GenerateNuspecDependencies;GenerateNuspec;GetPackageVersionInfo;Pack;GenerateAssemblyInfo"
+          Condition="'$(NewRelease)' != 'true'">
+
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\CoreTools\CoreTools.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildThisFileDirectory)..\version.json&quot; version"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BaseVersionFromJson" />
+    </Exec>
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildThisFileDirectory)..\version.json&quot; buildNumberOffset"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BuildNumberOffsetFromJson" />
+    </Exec>
+
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)..\buildnum.txt" Condition="Exists('$(MSBuildThisFileDirectory)..\buildnum.txt')">
+      <Output TaskParameter="Lines" PropertyName="PreviousBuildNumber" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <PreviousBuildNumber Condition="'$(PreviousBuildNumber)' == ''">0</PreviousBuildNumber>
+      <LocalBuildNumber>$([MSBuild]::Add($(PreviousBuildNumber), 1))</LocalBuildNumber>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(MSBuildThisFileDirectory)..\buildnum.txt" Lines="$(LocalBuildNumber)" Overwrite="true" />
+
+    <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHeight" />
+    </Exec>
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitShortHash" />
+    </Exec>
+
+    <PropertyGroup>
+      <_BuildNumberOffsetFromJson Condition="'$(_BuildNumberOffsetFromJson)' == ''">0</_BuildNumberOffsetFromJson>
+      <VersionPrefix>$(_BaseVersionFromJson).$(_BuildNumberOffsetFromJson)</VersionPrefix>
+      <Version>$(VersionPrefix)-$(GitCommitHeight).$(LocalBuildNumber).g$(GitShortHash)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="SaferAssemblyLoader prerelease version: $(Version)" />
+  </Target>
+
+  <Target Name="GenerateReleaseVersion"
+          BeforeTargets="GenerateNuspecDependencies;GenerateNuspec;GetPackageVersionInfo;Pack;GenerateAssemblyInfo"
+          Condition="'$(NewRelease)' == 'true'">
+
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\CoreTools\CoreTools.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; &quot;$(MSBuildThisFileDirectory)..\version.json&quot; version"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BaseVersionFromJson" />
+    </Exec>
+
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe&quot; --inc-integer &quot;$(MSBuildThisFileDirectory)..\version.json&quot; buildNumberOffset"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_NewBuildNumberOffset" />
+    </Exec>
+
+    <PropertyGroup>
+      <VersionPrefix>$(_BaseVersionFromJson).$(_NewBuildNumberOffset)</VersionPrefix>
+      <Version>$(VersionPrefix)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="SaferAssemblyLoader release version: $(Version)" />
+  </Target>
+
+  <!-- Deploy .nupkg to local NuGet feed after pack (skip for NewRelease builds) -->
+  <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != '' AND '$(NewRelease)' != 'true'">
+    <MakeDir Directories="$(LocalNuGetFeedPath)" Condition="!Exists('$(LocalNuGetFeedPath)')" />
+    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+          DestinationFolder="$(LocalNuGetFeedPath)"
+          OverwriteReadOnlyFiles="true" />
+    <Message Importance="High" Text="SaferAssemblyLoader: Deployed $(PackageId).$(PackageVersion).nupkg to $(LocalNuGetFeedPath)" />
+  </Target>
+
+</Project>

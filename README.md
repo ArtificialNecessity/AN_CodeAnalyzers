@@ -3,7 +3,16 @@
 (C)opyright 2026 by David Jeske
 Licensed under the Apache License, Version 2.0
 
-Roslyn code analyzers and MSBuild tools for preventing silent binary compatibility breaks in C# projects.
+Roslyn code analyzers, MSBuild tools, and runtime libraries for preventing silent binary compatibility breaks and enforcing managed-only assembly loading in C# projects.
+
+## Packages
+
+This repository produces two independent NuGet packages:
+
+| Package | Description |
+|---|---|
+| **ArtificialNecessity.CodeAnalyzers** | Roslyn analyzers + MSBuild tasks (build-time, development dependency) |
+| **ArtificialNecessity.SaferAssemblyLoader** | Runtime library — load assemblies with a managed-only guarantee |
 
 ## Analyzer Summary
 
@@ -51,6 +60,12 @@ AN_CodeAnalyzers/
 │   ├── JsonPeekTask.cs                  (MSBuild Task: JsonPeek)
 │   ├── JsonPeekTool/                    (standalone CLI: JsonPeek.exe)
 │   │   └── AN.CodeAnalyzers.JsonPeek.Tool.csproj
+│   └── Tests/
+├── SaferAssemblyLoader/                 ← standalone runtime library (separate NuGet package)
+│   ├── ArtificialNecessity.SaferAssemblyLoader.csproj  (netstandard2.0)
+│   ├── AssemblyManagedOnly.cs           (public API: LoadFrom, Load, IsManagedOnly, GetViolations)
+│   ├── ManagedAssemblyInspector.cs      (PE metadata scanning engine)
+│   ├── ManagedOnlyViolationException.cs
 │   └── Tests/
 ├── build/
 │   └── AN.CodeAnalyzers.targets
@@ -260,6 +275,42 @@ JsonPeek config.hjson database.host
 | `File` | Input (required) | Path to the JSON/JSONC/HJSON file |
 | `KeyPath` | Input (required) | Dot-separated key path (e.g. `version` or `parent.child.key`) |
 | `Value` | Output | The extracted value as a string |
+
+## SaferAssemblyLoader
+
+A standalone runtime library that loads .NET assemblies with a managed-only guarantee. Inspects PE metadata **before** loading — if the assembly contains `[DllImport]`, `IntPtr`, `Marshal.*` calls, or unsafe IL, it throws before the assembly enters your AppDomain.
+
+**Separate NuGet package:** `ArtificialNecessity.SaferAssemblyLoader` — no dependency on Roslyn or the analyzer package.
+
+```csharp
+using ArtificialNecessity.SaferAssemblyLoader;
+
+// Load a plugin — if it touches native code, it doesn't load
+try
+{
+    Assembly plugin = AssemblyManagedOnly.LoadFrom(pluginPath);
+    // safe to use
+}
+catch (ManagedOnlyViolationException ex)
+{
+    logger.Error($"Rejected plugin: {ex.Message}");
+    // the assembly was NEVER loaded — your process is clean
+}
+
+// Or just check without loading
+bool isSafe = AssemblyManagedOnly.IsManagedOnly(dllPath);
+IReadOnlyList<string> violations = AssemblyManagedOnly.GetViolations(dllPath);
+```
+
+**What it detects:**
+- `[DllImport]` and `[LibraryImport]` P/Invoke methods
+- `IntPtr`/`UIntPtr` in fields and method signatures
+- `Marshal.*` method calls
+- Unsafe IL opcodes (pointer loads/stores, `localloc`, `cpblk`)
+- Native/Unmanaged method implementations
+- Mixed-mode assemblies (PE `ILOnly` flag not set)
+
+See [`_TASKS/20_AN_SaferAssemblyLoader.md`](_TASKS/20_AN_SaferAssemblyLoader.md) for the full specification.
 
 ## Building
 
