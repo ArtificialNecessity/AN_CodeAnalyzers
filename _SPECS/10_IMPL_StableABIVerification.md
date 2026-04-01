@@ -1,5 +1,23 @@
 # AN.CodeAnalyzers
 
+> **TODO: Integration with AN0103 CallersMustNameAllParameters**
+>
+> StableABI verification needs to track parameter names and detect when they change in ways that would break callers:
+>
+> 1. **Always record parameter names** in the snapshot for:
+>    - All optional parameters (name changes are always ABI breaks)
+>    - All parameters of methods with `[CallersMustNameAllParameters]` attribute
+>    - All parameters when `RequireNamedArgumentsEverywhereLikeObjectiveC` is set to `everywhere-error` or `everywhere-warn`
+>
+> 2. **Error on parameter name changes** only when:
+>    - The parameter is optional (always enforced), OR
+>    - The method has `[CallersMustNameAllParameters]` attribute, OR
+>    - `everywhere-error` or `everywhere-warn` mode is active in the project
+>
+> This ensures we catch parameter name changes as ABI breaks wherever AN0103 would require named arguments at call sites.
+>
+> See also: [`_TASKS/40_IMPL_CallersMustNameAllParamaters.md`](_TASKS/40_IMPL_CallersMustNameAllParamaters.md)
+
 A single NuGet package containing all Artificial Necessity code analyzers.
 
 ## Package: `AN.CodeAnalyzers`

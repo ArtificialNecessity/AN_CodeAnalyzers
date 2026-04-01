@@ -1,5 +1,25 @@
 # AN0103 — CallersMustNameAllParameters Analyzer
 
+> **TODO: Integration with StableABI Verification**
+>
+> This analyzer and StableABI need to work together to prevent ABI breaks:
+>
+> 1. **StableABI must record parameter names** in the snapshot for:
+>    - All optional parameters (always an ABI invariant)
+>    - All parameters of methods decorated with `[CallersMustNameAllParameters]`
+>    - All parameters when `everywhere-error` or `everywhere-warn` mode is active
+>
+> 2. **StableABI should error on parameter name changes** only when:
+>    - The parameter is optional (always enforced), OR
+>    - The method has `[CallersMustNameAllParameters]` attribute, OR
+>    - `everywhere-error` or `everywhere-warn` mode is active
+>
+> This ensures parameter name changes are caught as ABI breaks wherever they would actually break callers who are required to use named arguments.
+>
+> See also: [`_SPECS/10_IMPL_StableABIVerification.md`](_SPECS/10_IMPL_StableABIVerification.md)
+
+# AN0103 — CallersMustNameAllParameters Analyzer
+
 ## What
 
 A Roslyn analyzer that enforces named parameters at call sites for methods with **2+ parameters**. Two modes:
@@ -170,11 +190,13 @@ flowchart TD
     C --> D[Parse comma-separated config values]
     D --> E[attribute-mode severity + everywhere-mode severity]
     E --> F{Invocation or ObjectCreation node}
-    F --> G{Method has CallersMustNameAllParameters attr?}
+    F --> P{Method has 0 or 1 params?}
+    P -->|Yes| K[Skip - always exempt]
+    P -->|No| G{Method has CallersMustNameAllParameters attr?}
     G -->|Yes| H[Use attribute-mode severity]
     G -->|No| I{everywhere-mode active?}
     I -->|Yes| J[Use everywhere-mode severity]
-    I -->|No| K[Skip - no diagnostic]
+    I -->|No| K
     H --> L{Any unnamed args?}
     J --> L
     L -->|Yes| M[Report AN0103 per unnamed arg]
