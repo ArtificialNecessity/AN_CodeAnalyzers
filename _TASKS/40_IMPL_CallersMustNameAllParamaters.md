@@ -2,7 +2,12 @@
 
 ## What
 
-A Roslyn analyzer that enforces named parameters at call sites for methods decorated with `[CallersMustNameAllParameters]`. If any argument at the call site lacks an explicit parameter name, it's a compile error.
+A Roslyn analyzer that enforces named parameters at call sites. Two modes:
+
+1. **Attribute mode** (default): Methods/constructors decorated with `[CallersMustNameAllParameters]` require all arguments to be named at every call site.
+2. **Everywhere mode** (joke/extreme): Every call site in the entire project must name every argument — Objective-C style.
+
+No code fix provider. The error message tells the developer exactly what to do.
 
 ## Why
 
@@ -13,47 +18,72 @@ Sonnet's actual bug: called `ResolveHeight(availableHeight)` instead of `Resolve
 ## Attribute
 
 ```csharp
-namespace ArtificialNecessity.CodeAnalyzers;
-
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Constructor)]
-public class CallersMustNameAllParametersAttribute : Attribute { }
+namespace AN.CodeAnalyzers.CallersMustNameAllParameters
+{
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Constructor)]
+    public sealed class CallersMustNameAllParametersAttribute : Attribute { }
+}
 ```
 
-Ship in the `ArtificialNecessity.CodeAnalyzers` NuGet alongside AN0100 and AN0101. The attribute is in the analyzers package so consumers get it automatically.
+Ships in the `ArtificialNecessity.CodeAnalyzers` NuGet alongside AN0100 and AN0101. The attribute is in the analyzers package so consumers get it automatically.
+
+## MSBuild Property
+
+```xml
+<PropertyGroup>
+  <RequireNamedArgumentsEverywhereLikeObjectiveC>attribute-error</RequireNamedArgumentsEverywhereLikeObjectiveC>
+</PropertyGroup>
+```
+
+Supports a **comma-separated list** of values. Each value controls one behavior:
+
+| Value | Behavior |
+|-------|----------|
+| `attribute-error` | Methods with `[CallersMustNameAllParameters]` require named args. Unnamed = **Error**. **(default)** |
+| `attribute-warn` | Same as above but unnamed = **Warning** |
+| `everywhere-error` | **Every** call site must name **every** argument. Unnamed = **Error**. |
+| `everywhere-warn` | Same as above but unnamed = **Warning** |
+| `ignore` | Disabled entirely — no diagnostics |
+
+**Combining values:** `attribute-error, everywhere-warn` means attribute-decorated methods produce errors, and all other call sites produce warnings. If both `attribute-error` and `attribute-warn` appear, `error` wins. Same for `everywhere-*`.
+
+**Default** (property absent or empty): `attribute-error` — only attribute-decorated methods are enforced, as errors.
 
 ## Analyzer
 
 **Diagnostic ID:** AN0103  
 **Category:** Naming  
-**Severity:** Error  
+**Severity:** Error or Warning (depends on config)  
 **Title:** Method requires named parameters at call site  
-**Message:** `Method '{methodName}' requires named parameters. Use '{parameterName}: value' for argument {position}.`
+**Message format:** `Argument {position} to '{methodName}' must be named. Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)`
 
 ### Detection Logic
 
 ```
-1. Find all InvocationExpressionSyntax and ObjectCreationExpressionSyntax nodes
-2. Resolve the target method symbol
-3. Check if the method (or constructor) has [CallersMustNameAllParameters]
-4. For each argument in the argument list:
-   a. If argument.NameColon is null → report AN0103
-   b. Include the expected parameter name in the diagnostic message
-5. Skip params array arguments (variable-length args are exempt)
+1. Read RequireNamedArgumentsEverywhereLikeObjectiveC MSBuild property
+2. Parse comma-separated values into attribute-mode severity + everywhere-mode severity
+3. For each InvocationExpressionSyntax and ObjectCreationExpressionSyntax:
+   a. Resolve the target method symbol
+   b. Determine which mode applies:
+      - If method/constructor has [CallersMustNameAllParameters] → use attribute-mode severity
+      - Else if everywhere-mode is active → use everywhere-mode severity
+      - Else → skip
+   c. For each argument in the argument list:
+      - If argument.NameColon is null → report AN0103
+      - Skip params array arguments (variable-length args are exempt)
+      - Include the expected parameter name in the diagnostic message
 ```
 
-### Code Fix
+### Error Message
 
-Auto-fix: insert the parameter name at each unnamed argument.
+The error message must be clear enough that a developer (or LLM) knows exactly how to fix it without looking up documentation:
 
-```csharp
-// Before fix:
-view.ResolveHeightGivenResolvedWidth(logicalWidth);
-
-// After fix (automatic):
-view.ResolveHeightGivenResolvedWidth(resolvedWidth: logicalWidth);
+```
+AN0103: Argument 1 to 'ResolveHeightGivenResolvedWidth' must be named. 
+        Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)
 ```
 
-The fix reads parameter names from the method symbol and inserts `NameColon` syntax at each argument position.
+For multiple unnamed args, one diagnostic per unnamed argument.
 
 ## Examples
 
@@ -76,49 +106,68 @@ view.AssignBounds(finalBounds: new RectangleF(0, 0, w, h));
 
 // ❌ AN0103 — unnamed parameter
 view.ResolveHeightGivenResolvedWidth(logicalWidth);
-//   → "Method 'ResolveHeightGivenResolvedWidth' requires named parameters. 
-//      Use 'resolvedWidth: value' for argument 1."
+//   → "Argument 1 to 'ResolveHeightGivenResolvedWidth' must be named.
+//      Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)"
 
 // ❌ AN0103 — partially named
 view.SetMargin(vertical: 4, 8, unit: CssUnit.Px);
-//   → "Use 'horizontal: value' for argument 2."
+//   → diagnostic on argument 2
 
 // ❌ AN0103 — all unnamed
 view.SetMargin(4, 8, CssUnit.Px);
 //   → three diagnostics, one per argument
 ```
 
-## Scope for Decoration
-
-Methods worth decorating (not exhaustive, add as needed):
-
-- Layout methods: `ResolveHeightGivenResolvedWidth`, `AssignBounds`, `GetResolvedWidth`
-- Any method with multiple parameters of the same type (two floats, two strings)
-- Fluent API methods where parameter meaning isn't obvious from type alone
-- Constructors with more than 2-3 parameters
-
 ## Test Cases
 
 - [ ] Method with attribute, all args named → no diagnostic
 - [ ] Method with attribute, one arg unnamed → AN0103 on that arg
 - [ ] Method with attribute, all args unnamed → AN0103 on each arg
-- [ ] Method WITHOUT attribute, unnamed args → no diagnostic (normal C#)
+- [ ] Method WITHOUT attribute, unnamed args → no diagnostic (default attribute-error mode)
 - [ ] Constructor with attribute, unnamed args → AN0103
 - [ ] Method with params array → exempt the params portion
-- [ ] Code fix inserts correct parameter names
-- [ ] Code fix handles multiple unnamed args in one call
 - [ ] Attribute on interface method → enforced on calls through the interface
+- [ ] `everywhere-warn` mode: method without attribute, unnamed args → AN0103 warning
+- [ ] `everywhere-error` mode: method without attribute, unnamed args → AN0103 error
+- [ ] `attribute-error, everywhere-warn` combined: attribute method unnamed → error, non-attribute method unnamed → warning
+- [ ] `ignore` mode → no diagnostics anywhere
+- [ ] Method with zero parameters → no diagnostic (nothing to name)
+- [ ] Method with single parameter, named → no diagnostic
+- [ ] Default (no MSBuild property) → attribute-error behavior
 
-## Files
+## Files to Create/Modify
 
-```
-AN_CodeAnalyzers/
-  Attributes/
-    CallersMustNameAllParametersAttribute.cs    ← the attribute
-  Analyzers/
-    AN0103_CallersMustNameAllParametersAnalyzer.cs
-  CodeFixes/
-    AN0103_CallersMustNameAllParametersCodeFix.cs
-  Tests/
-    AN0103_CallersMustNameAllParametersTests.cs
-```
+| Action | File |
+|--------|------|
+| CREATE | `CallersMustNameAllParameters/CallersMustNameAllParametersAttribute.cs` |
+| CREATE | `CallersMustNameAllParameters/CallersMustNameAllParametersAnalyzer.cs` |
+| CREATE | `CallersMustNameAllParameters/Tests/AN.CodeAnalyzers.CallersMustNameAllParameters.Tests.csproj` |
+| CREATE | `CallersMustNameAllParameters/Tests/CallersMustNameAllParametersVerifierHelper.cs` |
+| CREATE | `CallersMustNameAllParameters/Tests/CallersMustNameAllParametersAnalyzerTests.cs` |
+| MODIFY | `build/ArtificialNecessity.CodeAnalyzers.targets` — add `<CompilerVisibleProperty Include="RequireNamedArgumentsEverywhereLikeObjectiveC" />` |
+| MODIFY | `AN_CodeAnalyzers.sln` — add test project + solution folder |
+| MODIFY | `README.md` — add AN0103 documentation |
+| MODIFY | `README-nuget.md` — add AN0103 to analyzer summary table |
+
+No changes needed to `AN.CodeAnalyzers.csproj` — the existing `**/Tests/**` exclude already covers the new test directory, and the analyzer source files will be auto-included by the SDK glob.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[MSBuild Property: RequireNamedArgumentsEverywhereLikeObjectiveC] --> B[.targets: CompilerVisibleProperty]
+    B --> C[Roslyn: build_property.RequireNamedArgumentsEverywhereLikeObjectiveC]
+    C --> D[Parse comma-separated config values]
+    D --> E[attribute-mode severity + everywhere-mode severity]
+    E --> F{Invocation or ObjectCreation node}
+    F --> G{Method has CallersMustNameAllParameters attr?}
+    G -->|Yes| H[Use attribute-mode severity]
+    G -->|No| I{everywhere-mode active?}
+    I -->|Yes| J[Use everywhere-mode severity]
+    I -->|No| K[Skip - no diagnostic]
+    H --> L{Any unnamed args?}
+    J --> L
+    L -->|Yes| M[Report AN0103 per unnamed arg]
+    L -->|No| N[No diagnostic]
