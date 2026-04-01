@@ -2,10 +2,12 @@
 
 ## What
 
-A Roslyn analyzer that enforces named parameters at call sites. Two modes:
+A Roslyn analyzer that enforces named parameters at call sites for methods with **2+ parameters**. Two modes:
 
 1. **Attribute mode** (default): Methods/constructors decorated with `[CallersMustNameAllParameters]` require all arguments to be named at every call site.
 2. **Everywhere mode** (joke/extreme): Every call site in the entire project must name every argument — Objective-C style.
+
+**Single-parameter methods are always exempt**, regardless of mode or attribute. They're clear enough.
 
 No code fix provider. The error message tells the developer exactly what to do.
 
@@ -64,11 +66,12 @@ Supports a **comma-separated list** of values. Each value controls one behavior:
 2. Parse comma-separated values into attribute-mode severity + everywhere-mode severity
 3. For each InvocationExpressionSyntax and ObjectCreationExpressionSyntax:
    a. Resolve the target method symbol
-   b. Determine which mode applies:
+   b. If method has 0 or 1 parameters → skip (always exempt)
+   c. Determine which mode applies:
       - If method/constructor has [CallersMustNameAllParameters] → use attribute-mode severity
       - Else if everywhere-mode is active → use everywhere-mode severity
       - Else → skip
-   c. For each argument in the argument list:
+   d. For each argument in the argument list:
       - If argument.NameColon is null → report AN0103
       - Skip params array arguments (variable-length args are exempt)
       - Include the expected parameter name in the diagnostic message
@@ -89,24 +92,28 @@ For multiple unnamed args, one diagnostic per unnamed argument.
 
 ```csharp
 [CallersMustNameAllParameters]
-public float ResolveHeightGivenResolvedWidth(float resolvedWidth) { ... }
+public float GetArea(float width, float height) { ... }
 
 [CallersMustNameAllParameters]
 public void SetMargin(float vertical, float horizontal, CssUnit unit) { ... }
 
-[CallersMustNameAllParameters]  
-public void AssignBounds(RectangleF finalBounds) { ... }
+[CallersMustNameAllParameters]
+public void AssignBounds(RectangleF finalBounds) { ... }  // single param — exempt!
 ```
 
 ```csharp
 // ✅ All named — compiles
-view.ResolveHeightGivenResolvedWidth(resolvedWidth: logicalWidth);
+view.GetArea(width: 10, height: 20);
 view.SetMargin(vertical: 4, horizontal: 8, unit: CssUnit.Px);
-view.AssignBounds(finalBounds: new RectangleF(0, 0, w, h));
 
-// ❌ AN0103 — unnamed parameter
-view.ResolveHeightGivenResolvedWidth(logicalWidth);
-//   → "Argument 1 to 'ResolveHeightGivenResolvedWidth' must be named.
+// ✅ Single-parameter methods are always exempt — no diagnostic even with attribute
+view.AssignBounds(new RectangleF(0, 0, w, h));
+
+// ❌ AN0103 — unnamed parameters (2+ param method)
+view.GetArea(10, 20);
+//   → "Argument 1 to 'GetArea' must be named.
+//      Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)"
+//   → "Argument 2 to 'GetArea' must be named.
 //      Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)"
 
 // ❌ AN0103 — partially named
@@ -120,19 +127,20 @@ view.SetMargin(4, 8, CssUnit.Px);
 
 ## Test Cases
 
-- [ ] Method with attribute, all args named → no diagnostic
-- [ ] Method with attribute, one arg unnamed → AN0103 on that arg
-- [ ] Method with attribute, all args unnamed → AN0103 on each arg
+- [ ] Method with attribute (2+ params), all args named → no diagnostic
+- [ ] Method with attribute (2+ params), one arg unnamed → AN0103 on that arg
+- [ ] Method with attribute (2+ params), all args unnamed → AN0103 on each arg
 - [ ] Method WITHOUT attribute, unnamed args → no diagnostic (default attribute-error mode)
-- [ ] Constructor with attribute, unnamed args → AN0103
+- [ ] Constructor with attribute (2+ params), unnamed args → AN0103
 - [ ] Method with params array → exempt the params portion
 - [ ] Attribute on interface method → enforced on calls through the interface
-- [ ] `everywhere-warn` mode: method without attribute, unnamed args → AN0103 warning
-- [ ] `everywhere-error` mode: method without attribute, unnamed args → AN0103 error
+- [ ] `everywhere-warn` mode: method without attribute (2+ params), unnamed args → AN0103 warning
+- [ ] `everywhere-error` mode: method without attribute (2+ params), unnamed args → AN0103 error
 - [ ] `attribute-error, everywhere-warn` combined: attribute method unnamed → error, non-attribute method unnamed → warning
 - [ ] `ignore` mode → no diagnostics anywhere
 - [ ] Method with zero parameters → no diagnostic (nothing to name)
-- [ ] Method with single parameter, named → no diagnostic
+- [ ] **Single-parameter method with attribute, unnamed arg → no diagnostic (always exempt)**
+- [ ] **Single-parameter method in everywhere mode, unnamed arg → no diagnostic (always exempt)**
 - [ ] Default (no MSBuild property) → attribute-error behavior
 
 ## Files to Create/Modify
