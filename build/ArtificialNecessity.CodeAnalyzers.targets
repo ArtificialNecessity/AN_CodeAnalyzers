@@ -6,6 +6,8 @@
     <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
     <!-- RequireTypedPointersNotIntPtr (AN0100) -->
     <CompilerVisibleProperty Include="RequireTypedPointersNotIntPtr" />
+    <!-- EnforceNamingConventions (AN0200) -->
+    <CompilerVisibleProperty Include="EnforceNamingConventions" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════

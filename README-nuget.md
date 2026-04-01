@@ -9,6 +9,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 | Verifier                            | Rule   | Description                                                                                                                                                                                    |
 | ----------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RequireTypedPointersNotIntPtr**         | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
+| **EnforceNamingConventions**  | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**             | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                              |
 | **PublicConstAnalyzer**       | AN0002 | Warning:`public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                              |
 | **StableABIVerification**     | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
@@ -47,6 +48,29 @@ This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, 
 | `ignore`   | Disabled                                       |
 
 **Recommended:** Isolate native interop type definitions in a small dedicated project with `<RequireTypedPointersNotIntPtr>ignore</RequireTypedPointersNotIntPtr>`, and set `disallow` or `warn` in all other projects.
+
+### AN0200: Enforce naming conventions
+
+Enforces configurable naming conventions via regex patterns. **Currently supports: events only.**
+
+**Configuration:**
+
+```xml
+<PropertyGroup>
+  <EnforceNamingConventions>{ event = "On.*" }</EnforceNamingConventions>
+</PropertyGroup>
+```
+
+- **key** = symbol category (currently: `event`; future: `method`, `property`, `field`, `class`, `interface`)
+- **value** = regex pattern (auto-anchored: `On.*` → `^(?:On.*)$`)
+
+**Example diagnostic:**
+
+```
+AN0200: Event 'ButtonClick' does not match required naming pattern 'On.*'. Rename to match the convention.
+```
+
+**Disabled by default** — no diagnostics when property is absent.
 
 ### AN0001: Enum member must have explicit value
 

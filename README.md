@@ -19,6 +19,7 @@ This repository produces two independent NuGet packages:
 | Verifier                        | Rule   | Description                                                                                                                                                                         |
 | ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
+| **EnforceNamingConventions** | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
@@ -48,6 +49,13 @@ AN_CodeAnalyzers/
 ├── PublicConstAnalyzer/                 ← AN0002 analyzer
 │   ├── PublicConstAnalyzer.cs
 │   ├── PermanentConstAttribute.cs
+│   └── Tests/
+├── RequireTypedPointersNotIntPtr/       ← AN0100 analyzer
+│   ├── RequireTypedPointersNotIntPtrAnalyzer.cs
+│   └── Tests/
+├── EnforceNamingConventions/            ← AN0200 analyzer
+│   ├── EnforceNamingConventionsAnalyzer.cs
+│   ├── NamingConventionRuleParser.cs
 │   └── Tests/
 ├── StableABIVerification/               ← MSBuild task (separate project)
 │   ├── StableABIVerification.csproj
@@ -102,6 +110,44 @@ This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, 
 | `ignore`   | Disabled                                       |
 
 **Recommended project organization:** Isolate native interop type definitions in a small dedicated project with `<RequireTypedPointersNotIntPtr>ignore</RequireTypedPointersNotIntPtr>`, and set `disallow` or `warn` in all other projects. This forces all untyped pointer manipulation into a single, reviewable location.
+
+### AN0200: Enforce naming conventions
+
+Enforces configurable naming conventions via regex patterns. **Currently supports: events only.** The architecture is designed for future expansion to methods, properties, fields, classes, interfaces, etc.
+
+**Configuration** via MSBuild property with JSON-like syntax:
+
+```xml
+<PropertyGroup>
+  <EnforceNamingConventions>{ event = "On.*" }</EnforceNamingConventions>
+</PropertyGroup>
+```
+
+The value is a brace-delimited set of `key = "value"` pairs where:
+- **key** = symbol category (currently: `event`; future: `method`, `property`, `field`, `class`, `interface`)
+- **value** = regex pattern the symbol name must match (auto-anchored: `On.*` becomes `^(?:On.*)$`)
+
+**Multiple rules** (for future expansion):
+
+```xml
+<EnforceNamingConventions>{ event = "On.*", interface = "I.*" }</EnforceNamingConventions>
+```
+
+**Disabled by default** — no diagnostics when property is absent or empty.
+
+**Example diagnostic:**
+
+```
+AN0200: Event 'ButtonClick' does not match required naming pattern 'On.*'. Rename to match the convention.
+```
+
+**Configuration errors** are reported as AN0201 warnings if the JSON-like syntax is malformed or regex patterns are invalid.
+
+**Supported symbol categories:**
+- ✅ `event` — Event declarations (Phase 1)
+- 🔜 `interface`, `class`, `struct`, `enum`, `method`, `property`, `field` — planned for Phase 2+
+
+See [`_TASKS/30_IMPL_EnforceNamingConventions.md`](_TASKS/30_IMPL_EnforceNamingConventions.md) for the full roadmap.
 
 ### AN0001: Enum member must have explicit value
 
