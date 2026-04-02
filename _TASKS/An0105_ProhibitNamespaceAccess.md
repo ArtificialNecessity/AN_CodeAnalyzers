@@ -28,8 +28,37 @@ Prohibit access to specific namespaces in a project. Any type reference from a p
 - Cast expressions (`(MemoryMappedFile)obj`)
 - Object creation (`new MemoryMappedFile(...)`)
 - Fully-qualified references (`System.IO.MemoryMappedFiles.MemoryMappedFile.CreateNew(...)`)
+- **Transitive type exposure via `var`** — see below
 
 **Secondary detection: `using` directives.** A `using` directive for a prohibited namespace produces a **warning** (never error), regardless of the configured severity. If you can't use anything in the namespace, the `using` is superfluous cruft. The warning helps clean it up but doesn't break the build.
+
+---
+
+## Transitive Type Exposure
+
+**Prohibited types must not leak through `var` or type inference.** If a method in an allowed namespace returns a type from a prohibited namespace, and the caller captures it with `var`, that is still a violation. The type is prohibited — it doesn't matter how it arrived.
+
+```csharp
+// Assume System.IO.MemoryMappedFiles is prohibited
+
+// AN0105 ERROR — the inferred type of 'mmf' is MemoryMappedFile, which is prohibited
+var mmf = SomeHelper.GetMappedFile();
+
+// AN0105 ERROR — same thing, explicit method call on a prohibited type
+var view = mmf.CreateViewAccessor();
+```
+
+**Implementation:** For every `var` declaration (and other type-inferred contexts like `out var`, lambda parameter types, tuple deconstruction), resolve the inferred type via the semantic model and check its namespace against the prohibited patterns. This ensures there is **no way** to leak a prohibited type into the project — not through explicit references, not through type inference, not through any other mechanism.
+
+**What this catches that explicit type checking misses:**
+
+| Code | Explicit type visible? | `var` hides it? | AN0105 catches it? |
+|---|---|---|---|
+| `MemoryMappedFile mmf = ...` | Yes | No | Yes — explicit type |
+| `var mmf = GetMappedFile()` | No | Yes | Yes — inferred type |
+| `out var view` | No | Yes | Yes — inferred type |
+| `foreach (var item in GetItems())` | No | Yes | Yes — inferred type |
+| `var (a, b) = GetTuple()` | No | Yes | Yes — inferred type |
 
 ---
 
@@ -108,13 +137,23 @@ Patterns are **prefix-based string matching** on the fully-qualified namespace o
 
 ### AN0105 — Type reference (error or warn, per config)
 
+**Single occurrence:**
 ```
 AN0105: Access to '{TypeName}' in namespace '{Namespace}' is prohibited by pattern '{Pattern}' in <ProhibitNamespaceAccess>
 ```
 
-**Example:**
+**Multiple occurrences of the same type in one file (deduplicated):**
+```
+AN0105: Access to '{TypeName}' in namespace '{Namespace}' is prohibited by pattern '{Pattern}' in <ProhibitNamespaceAccess> ({Count} references in this file)
+```
+
+**Examples:**
 ```
 AN0105: Access to 'MemoryMappedFile' in namespace 'System.IO.MemoryMappedFiles' is prohibited by pattern 'System.IO.MemoryMappedFiles' in <ProhibitNamespaceAccess>
+```
+
+```
+AN0105: Access to 'MemoryMappedFile' in namespace 'System.IO.MemoryMappedFiles' is prohibited by pattern 'System.IO.MemoryMappedFiles' in <ProhibitNamespaceAccess> (10 references in this file)
 ```
 
 ```
@@ -233,7 +272,11 @@ This combines AN0104 (prohibit P/Invoke constructs) with AN0105 (prohibit even r
 
 3. **Register syntax node action for using directives:** For each `UsingDirectiveSyntax`, resolve the namespace symbol and check against all patterns. Always report as warning severity.
 
-4. **Deduplication:** To avoid flooding the user with diagnostics, consider reporting at most once per type per file (or per type per method). The exact deduplication strategy can be refined during implementation.
+4. **Deduplication (mandatory):** Report **at most one diagnostic per unique prohibited type per file**. If `MemoryMappedFile` appears 10 times in a file, emit ONE diagnostic on the first occurrence with a message like: `"Access to 'MemoryMappedFile' in namespace 'System.IO.MemoryMappedFiles' is prohibited by pattern 'System.IO.MemoryMappedFiles' in <ProhibitNamespaceAccess> (10 references in this file)"`. Ten squigglies is noise. One diagnostic with a count is actionable.
+
+**Implementation:** Use a `Dictionary<(string typeName, string namespaceName), (Location firstLocation, int count)>` per syntax tree. Accumulate all violations during the syntax node walk, then report once per unique type at the end of the tree analysis (via `RegisterSyntaxTreeAction` or `CompilationEndAction` per tree).
+
+5. **Transitive type detection:** For `var` declarations, `out var`, lambda parameters, `foreach var`, and tuple deconstruction — resolve the inferred type via `SemanticModel.GetTypeInfo()` and check its containing namespace. This ensures prohibited types cannot leak through type inference.
 
 ### Parser extension
 
