@@ -21,6 +21,7 @@ This repository produces two independent NuGet packages:
 | **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
 | **CallersMustNameAllParameters** | AN0103 | Enforces named arguments at call sites for methods with 2+ parameters. Attribute-driven or everywhere mode. Prevents LLM parameter-order confusion. |
 | **ProhibitPlatformImports** | AN0104 | Flags `[DllImport]`, `[LibraryImport]`, `[UnmanagedCallersOnly]`, and `NativeLibrary.Load/TryLoad` calls. Project-level policy to prohibit all platform imports. |
+| **ProhibitNamespaceAccess** | AN0105 | Prohibit access to specific namespaces. Flags type references (including `var` inference) from prohibited namespaces. Supports prefix globbing with `*`. Per-pattern error/warn severity. |
 | **EnforceNamingConventions** | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
@@ -61,6 +62,10 @@ AN_CodeAnalyzers/
 │   └── Tests/
 ├── ProhibitPlatformImports/             ← AN0104 analyzer
 │   ├── ProhibitPlatformImportsAnalyzer.cs
+│   └── Tests/
+├── ProhibitNamespaceAccess/             ← AN0105 analyzer
+│   ├── ProhibitNamespaceAccessAnalyzer.cs
+│   ├── ProhibitNamespaceAccessConfigParser.cs
 │   └── Tests/
 ├── EnforceNamingConventions/            ← AN0200 analyzer
 │   ├── EnforceNamingConventionsAnalyzer.cs
@@ -195,6 +200,43 @@ Flags any platform import construct in a project that has `<ProhibitPlatformImpo
 AN0104: Platform import 'CloseHandle' is prohibited because <ProhibitPlatformImports> is set to 'error'
 AN0104: Call to 'NativeLibrary.Load' is prohibited because <ProhibitPlatformImports> is set to 'error'
 ```
+
+### AN0105: Prohibit namespace access
+
+Prohibit access to specific namespaces in a project. Any type reference from a prohibited namespace produces a diagnostic — including types leaked through `var` inference. Patterns support prefix globbing with `*`.
+
+**Configuration** via MSBuild property with JSON-like syntax:
+
+```xml
+<PropertyGroup>
+  <ProhibitNamespaceAccess>{ error = [ "System.Runtime.InteropServices", "System.IO.MemoryMappedFiles" ], warn = [ "OpenTK.*" ] }</ProhibitNamespaceAccess>
+</PropertyGroup>
+```
+
+| Key | Behavior |
+|-----|----------|
+| `error` | Error — build fails on any type reference from matching namespaces |
+| `warn` | Warning severity |
+
+**Pattern matching:**
+- `System.Runtime.InteropServices` — exact namespace match only
+- `System.Runtime.Interop*` — prefix glob: matches `InteropServices`, `InteropServices.Marshalling`, `InteropStuffNotInventedYet`
+- `System.Runtime.*` — matches all child namespaces of `System.Runtime`
+
+**Using directives** for prohibited namespaces always produce **warnings** (never errors) — they're superfluous cruft if you can't use anything in the namespace.
+
+**Deduplication:** One diagnostic per unique prohibited type per file. If `MemoryMappedFile` appears 10 times, one diagnostic with the count.
+
+**Transitive type exposure:** `var handle = Factory.Create()` — if the inferred type is from a prohibited namespace, it's flagged. No way to leak prohibited types through type inference.
+
+**Example diagnostics:**
+
+```
+AN0105: Access to 'MemoryMappedFile' in namespace 'System.IO.MemoryMappedFiles' is prohibited by pattern 'System.IO.MemoryMappedFiles' in <ProhibitNamespaceAccess>
+AN0105: Using directive for namespace 'System.Runtime.InteropServices' is prohibited by pattern 'System.Runtime.Interop*' in <ProhibitNamespaceAccess>. Remove this unused using directive.
+```
+
+See [`_TASKS/An0105_ProhibitNamespaceAccess.md`](_TASKS/An0105_ProhibitNamespaceAccess.md) for the full specification.
 
 ### AN0200: Enforce naming conventions
 

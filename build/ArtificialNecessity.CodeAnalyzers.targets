@@ -12,6 +12,8 @@
     <CompilerVisibleProperty Include="EnforceNamingConventions" />
     <!-- ProhibitPlatformImports (AN0104) -->
     <CompilerVisibleProperty Include="ProhibitPlatformImports" />
+    <!-- ProhibitNamespaceAccess (AN0105) -->
+    <CompilerVisibleProperty Include="ProhibitNamespaceAccess" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
