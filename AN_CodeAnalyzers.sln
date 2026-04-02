@@ -71,6 +71,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0314D241
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.EnforceNamingConventions.Tests", "EnforceNamingConventions\Tests\AN.CodeAnalyzers.EnforceNamingConventions.Tests.csproj", "{CD570ADE-705B-4902-8AFB-3C2D9516153E}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CallersMustNameAllParameters", "CallersMustNameAllParameters", "{B8F3E4A1-9C2D-4F5E-A7B3-1D6E8F9A0C2B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.CallersMustNameAllParameters.Tests", "CallersMustNameAllParameters\Tests\AN.CodeAnalyzers.CallersMustNameAllParameters.Tests.csproj", "{ADDD6F2F-2FDB-96C0-EB29-5BA3904FFD77}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProhibitPlatformImports", "ProhibitPlatformImports", "{09445335-5E6F-6FDB-A854-511FFDEAE711}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{D7B81BC5-C06E-45DD-0191-D1E883125164}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ProhibitPlatformImports.Tests", "ProhibitPlatformImports\Tests\AN.CodeAnalyzers.ProhibitPlatformImports.Tests.csproj", "{832E30FD-328C-495D-B032-18E92F46C8A0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -285,6 +297,18 @@ Global
 		{CD570ADE-705B-4902-8AFB-3C2D9516153E}.Release|x64.Build.0 = Release|Any CPU
 		{CD570ADE-705B-4902-8AFB-3C2D9516153E}.Release|x86.ActiveCfg = Release|Any CPU
 		{CD570ADE-705B-4902-8AFB-3C2D9516153E}.Release|x86.Build.0 = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|x64.Build.0 = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Debug|x86.Build.0 = Debug|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|x64.ActiveCfg = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|x64.Build.0 = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|x86.ActiveCfg = Release|Any CPU
+		{832E30FD-328C-495D-B032-18E92F46C8A0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -309,6 +333,8 @@ Global
 		{14F6E0F0-B3C7-43FE-948F-BB847C8E1FC8} = {1BBB693B-47EA-521D-2BDA-A6A626E9A630}
 		{0314D241-B6C1-5301-DB90-FD736F3E573F} = {F2996D19-7238-053F-0A35-EA4F7C141691}
 		{CD570ADE-705B-4902-8AFB-3C2D9516153E} = {0314D241-B6C1-5301-DB90-FD736F3E573F}
+		{D7B81BC5-C06E-45DD-0191-D1E883125164} = {09445335-5E6F-6FDB-A854-511FFDEAE711}
+		{832E30FD-328C-495D-B032-18E92F46C8A0} = {D7B81BC5-C06E-45DD-0191-D1E883125164}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {045BD3FB-635F-488C-B89D-A42311F92BFA}

@@ -19,6 +19,8 @@ This repository produces two independent NuGet packages:
 | Verifier                        | Rule   | Description                                                                                                                                                                         |
 | ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
+| **CallersMustNameAllParameters** | AN0103 | Enforces named arguments at call sites for methods with 2+ parameters. Attribute-driven or everywhere mode. Prevents LLM parameter-order confusion. |
+| **ProhibitPlatformImports** | AN0104 | Flags `[DllImport]`, `[LibraryImport]`, `[UnmanagedCallersOnly]`, and `NativeLibrary.Load/TryLoad` calls. Project-level policy to prohibit all platform imports. |
 | **EnforceNamingConventions** | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
@@ -52,6 +54,13 @@ AN_CodeAnalyzers/
 │   └── Tests/
 ├── RequireTypedPointersNotIntPtr/       ← AN0100 analyzer
 │   ├── RequireTypedPointersNotIntPtrAnalyzer.cs
+│   └── Tests/
+├── CallersMustNameAllParameters/        ← AN0103 analyzer
+│   ├── CallersMustNameAllParametersAttribute.cs
+│   ├── CallersMustNameAllParametersAnalyzer.cs
+│   └── Tests/
+├── ProhibitPlatformImports/             ← AN0104 analyzer
+│   ├── ProhibitPlatformImportsAnalyzer.cs
 │   └── Tests/
 ├── EnforceNamingConventions/            ← AN0200 analyzer
 │   ├── EnforceNamingConventionsAnalyzer.cs
@@ -110,6 +119,82 @@ This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, 
 | `ignore`   | Disabled                                       |
 
 **Recommended project organization:** Isolate native interop type definitions in a small dedicated project with `<RequireTypedPointersNotIntPtr>ignore</RequireTypedPointersNotIntPtr>`, and set `disallow` or `warn` in all other projects. This forces all untyped pointer manipulation into a single, reviewable location.
+
+### AN0103: Callers must name all parameters
+
+Enforces named arguments at call sites for methods with **2+ parameters**. Prevents LLM parameter-order confusion by making intent explicit at the call site.
+
+**Why:** LLMs guess parameter order by vibes. A method like `ResolveHeight(float value)` gets called with whatever float is nearby. Named parameters make the intent visible: `ResolveHeight(resolvedWidth: availableHeight)` — the name mismatch is now obvious even before the compiler catches it.
+
+**Configuration** via MSBuild property:
+
+```xml
+<PropertyGroup>
+  <RequireNamedArgumentsEverywhereLikeObjectiveC>attribute-error</RequireNamedArgumentsEverywhereLikeObjectiveC>
+</PropertyGroup>
+```
+
+| Value | Behavior |
+|-------|----------|
+| `attribute-error` | Methods with `[CallersMustNameAllParameters]` require named args. Unnamed = **Error**. **(default)** |
+| `attribute-warn` | Same as above but unnamed = **Warning** |
+| `everywhere-error` | **Every** call site must name **every** argument. Unnamed = **Error**. (Objective-C style) |
+| `everywhere-warn` | Same as above but unnamed = **Warning** |
+| `ignore` | Disabled entirely |
+
+**Combining values:** Comma-separated list supported. `attribute-error, everywhere-warn` means attribute-decorated methods produce errors, all other call sites produce warnings.
+
+**Single-parameter methods are always exempt** — they're clear enough without naming.
+
+**Example:**
+
+```csharp
+using AN.CodeAnalyzers.CallersMustNameAllParameters;
+
+[CallersMustNameAllParameters]
+public void SetMargin(float vertical, float horizontal) { }
+
+// ✅ Compiles
+SetMargin(vertical: 4, horizontal: 8);
+
+// ❌ AN0103 error: "Argument 1 to 'SetMargin' must be named.
+//                   Use named arguments for all parameters, e.g. MyMethod(argA: 1, argB: 2)"
+SetMargin(4, 8);
+```
+
+### AN0104: Prohibit platform imports
+
+Flags any platform import construct in a project that has `<ProhibitPlatformImports>` set. This is a project-level policy: when enabled, **no** P/Invoke or native library loading is allowed in that project.
+
+**What it detects:**
+- `[DllImport]` attributes on methods
+- `[LibraryImport]` attributes on methods
+- `[UnmanagedCallersOnly]` attributes on methods
+- `NativeLibrary.Load()` calls
+- `NativeLibrary.TryLoad()` calls
+
+**Configuration** via MSBuild property:
+
+```xml
+<PropertyGroup>
+  <ProhibitPlatformImports>error</ProhibitPlatformImports>
+</PropertyGroup>
+```
+
+| Value      | Behavior                        |
+| ---------- | ------------------------------- |
+| `disabled` | No diagnostics **(default)**    |
+| `warn`     | Warning severity                |
+| `error`    | Error — build fails            |
+
+**Recommended project organization:** Isolate native interop in a small dedicated project with `<ProhibitPlatformImports>disabled</ProhibitPlatformImports>`, and set `error` in all other projects. This forces all platform-specific code into a single, reviewable location.
+
+**Example diagnostics:**
+
+```
+AN0104: Platform import 'CloseHandle' is prohibited because <ProhibitPlatformImports> is set to 'error'
+AN0104: Call to 'NativeLibrary.Load' is prohibited because <ProhibitPlatformImports> is set to 'error'
+```
 
 ### AN0200: Enforce naming conventions
 

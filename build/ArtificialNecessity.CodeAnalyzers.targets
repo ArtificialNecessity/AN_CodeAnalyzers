@@ -6,8 +6,12 @@
     <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
     <!-- RequireTypedPointersNotIntPtr (AN0100) -->
     <CompilerVisibleProperty Include="RequireTypedPointersNotIntPtr" />
+    <!-- CallersMustNameAllParameters (AN0103) -->
+    <CompilerVisibleProperty Include="RequireNamedArgumentsEverywhereLikeObjectiveC" />
     <!-- EnforceNamingConventions (AN0200) -->
     <CompilerVisibleProperty Include="EnforceNamingConventions" />
+    <!-- ProhibitPlatformImports (AN0104) -->
+    <CompilerVisibleProperty Include="ProhibitPlatformImports" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
