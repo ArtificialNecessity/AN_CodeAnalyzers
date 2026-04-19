@@ -593,5 +593,403 @@ public class MyRenderer : IRenderer
                 });
             await analyzerTest.RunAsync();
         }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: private helper mutates instance field
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_PrivateHelper_MutatesField_ReportsDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private bool _dirty;
+
+    [PureFunction]
+    public void Draw()
+    {
+        DrawHeader();
+    }
+
+    private void DrawHeader()
+    {
+        {|#0:_dirty = false|};
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501TransitiveError(
+                        0, "Draw", "field", "_dirty", "Draw \u2192 DrawHeader"),
+                });
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: two-level deep call chain
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_TwoLevelDeep_ReportsDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private int _state;
+
+    [PureFunction]
+    public void Draw()
+    {
+        DrawHeader();
+    }
+
+    private void DrawHeader()
+    {
+        ResetState();
+    }
+
+    private void ResetState()
+    {
+        {|#0:_state = 0|};
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501TransitiveError(
+                        0, "Draw", "field", "_state", "Draw \u2192 DrawHeader \u2192 ResetState"),
+                });
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: call on a different object — NOT flagged
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_CallOnFieldObject_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class Logger
+{
+    private int _lineCount;
+    public void AddLine(string text) { _lineCount++; }
+}
+
+public class TestClass
+{
+    private Logger _logger = new Logger();
+
+    [PureFunction]
+    public void Draw()
+    {
+        _logger.AddLine(""drawing"");
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: call on parameter object — NOT flagged
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_CallOnParameter_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class DrawContext
+{
+    private int _drawCount;
+    public void RecordDraw() { _drawCount++; }
+}
+
+public class TestClass
+{
+    [PureFunction]
+    public void Draw(DrawContext dc)
+    {
+        dc.RecordDraw();
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: virtual method call — NOT followed
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_VirtualMethodCall_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private int _state;
+
+    [PureFunction]
+    public void Draw()
+    {
+        DoWork();
+    }
+
+    protected virtual void DoWork()
+    {
+        _state = 1;
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: static method call — NOT followed
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_StaticMethodCall_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private static int s_count;
+
+    [PureFunction]
+    public void Draw()
+    {
+        Increment();
+    }
+
+    private static void Increment()
+    {
+        s_count++;
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: cycle guard — A calls B calls A
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_CyclicCalls_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private int _depth;
+
+    [PureFunction]
+    public void Draw()
+    {
+        PingPongA();
+    }
+
+    private void PingPongA()
+    {
+        if (_depth < 10) PingPongB();
+    }
+
+    private void PingPongB()
+    {
+        if (_depth < 10) PingPongA();
+    }
+}";
+            // No mutations in the cycle, just reads — should not flag or infinite loop
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: direct + transitive in same method
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_DirectAndTransitive_BothReported()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private int _a;
+    private int _b;
+
+    [PureFunction]
+    public void Draw()
+    {
+        {|#0:_a = 1|};
+        MutateB();
+    }
+
+    private void MutateB()
+    {
+        {|#1:_b = 2|};
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501Error(0, "Draw", "field", "_a"),
+                    PureFunctionVerifierHelper.ExpectAN0501TransitiveError(
+                        1, "Draw", "field", "_b", "Draw \u2192 MutateB"),
+                });
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: helper with property mutation
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_HelperMutatesProperty_ReportsDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    public bool Visible { get; set; }
+
+    [PureFunction]
+    public void Draw()
+    {
+        HideIfNeeded();
+    }
+
+    private void HideIfNeeded()
+    {
+        {|#0:Visible = false|};
+    }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501TransitiveError(
+                        0, "Draw", "property", "Visible", "Draw \u2192 HideIfNeeded"),
+                });
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE: helper passes instance field by ref
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task Transitive_HelperPassesRefField_ReportsDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private int _value;
+
+    [PureFunction]
+    public void Draw()
+    {
+        ResetValue();
+    }
+
+    private void ResetValue()
+    {
+        SetToZero({|#0:ref _value|});
+    }
+
+    private static void SetToZero(ref int x) { x = 0; }
+}";
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501TransitiveError(
+                        0, "Draw", "field", "_value", "Draw \u2192 ResetValue"),
+                });
+            await analyzerTest.RunAsync();
+        }
+
+        // ══════════════════════════════════════════════════
+        // TRANSITIVE = FALSE: opt-out disables transitive
+        // ══════════════════════════════════════════════════
+
+        [Fact]
+        public async Task TransitiveFalse_HelperMutatesField_NoDiagnostic()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private bool _dirty;
+
+    [PureFunction(Transitive = false)]
+    public void Draw()
+    {
+        DrawHeader();
+    }
+
+    private void DrawHeader()
+    {
+        _dirty = false;
+    }
+}";
+            // Transitive disabled — helper mutation is NOT flagged
+            var analyzerTest = PureFunctionVerifierHelper.CreateNoDiagnosticsTest(testSource);
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task TransitiveFalse_DirectMutation_StillFlagged()
+        {
+            const string testSource = @"
+using AN.CodeAnalyzers.PureFunction;
+
+public class TestClass
+{
+    private bool _dirty;
+
+    [PureFunction(Transitive = false)]
+    public void Draw()
+    {
+        {|#0:_dirty = false|};
+        DrawHeader();
+    }
+
+    private void DrawHeader()
+    {
+        _dirty = true;
+    }
+}";
+            // Direct mutation still flagged, transitive mutation in DrawHeader is NOT
+            var analyzerTest = PureFunctionVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    PureFunctionVerifierHelper.ExpectAN0501Error(0, "Draw", "field", "_dirty"),
+                });
+            await analyzerTest.RunAsync();
+        }
     }
 }

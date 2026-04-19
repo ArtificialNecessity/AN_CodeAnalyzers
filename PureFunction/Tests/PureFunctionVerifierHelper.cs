@@ -21,7 +21,10 @@ using System;
 namespace AN.CodeAnalyzers.PureFunction
 {
     [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
-    public sealed class PureFunctionAttribute : Attribute { }
+    public sealed class PureFunctionAttribute : Attribute
+    {
+        public bool Transitive { get; set; } = true;
+    }
 }
 ";
 
@@ -62,6 +65,7 @@ namespace AN.CodeAnalyzers.PureFunction
 
         /// <summary>
         /// Builds a <see cref="DiagnosticResult"/> for AN0501 at the given markup location index.
+        /// For direct mutations (no call chain).
         /// </summary>
         public static DiagnosticResult ExpectAN0501Error(
             int markupIndex,
@@ -69,9 +73,28 @@ namespace AN.CodeAnalyzers.PureFunction
             string memberKind,
             string memberName)
         {
+            string detail = $"Assignment to instance {memberKind} '{memberName}' is not allowed here.";
             return new DiagnosticResult(PureFunctionAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
                 .WithLocation(markupIndex)
-                .WithArguments(methodName, memberKind, memberName);
+                .WithArguments(methodName, detail);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="DiagnosticResult"/> for AN0501 at the given markup location index.
+        /// For transitive mutations detected via a call chain.
+        /// <paramref name="callChain"/> is the full chain string, e.g. "Draw \u2192 DrawHeader \u2192 ResetState".
+        /// </summary>
+        public static DiagnosticResult ExpectAN0501TransitiveError(
+            int markupIndex,
+            string pureFunctionMethodName,
+            string memberKind,
+            string memberName,
+            string callChain)
+        {
+            string detail = $"Assignment to instance {memberKind} '{memberName}' is not allowed (via call chain: {callChain}).";
+            return new DiagnosticResult(PureFunctionAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+                .WithLocation(markupIndex)
+                .WithArguments(pureFunctionMethodName, detail);
         }
     }
 }

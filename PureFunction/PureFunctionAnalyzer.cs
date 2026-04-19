@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -15,11 +16,13 @@ namespace AN.CodeAnalyzers.PureFunction
         private static readonly DiagnosticDescriptor rule = new DiagnosticDescriptor(
             DiagnosticId,
             "Instance state mutation in [PureFunction] method",
-            "Method '{0}' is marked [PureFunction] and must not modify instance state. Assignment to instance {1} '{2}' is not allowed here.",
+            "Method '{0}' is marked [PureFunction] and must not modify \"this\" instance state. {1}",
             category,
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Methods marked [PureFunction] must not write to instance fields or properties. This enforces side-effect-free methods for render passes, layout measurement, and hit testing.");
+            description: "Methods marked [PureFunction] must not write to instance fields or properties, " +
+                         "including through calls to private/internal helpers on the same instance. " +
+                         "This enforces side-effect-free methods for render passes, layout measurement, and hit testing.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(rule);
 
@@ -28,103 +31,239 @@ namespace AN.CodeAnalyzers.PureFunction
             analysisContext.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             analysisContext.EnableConcurrentExecution();
 
-            analysisContext.RegisterOperationBlockStartAction(operationBlockStartContext =>
+            analysisContext.RegisterOperationBlockAction(operationBlockContext =>
             {
-                if (!(operationBlockStartContext.OwningSymbol is IMethodSymbol methodSymbol))
+                if (!(operationBlockContext.OwningSymbol is IMethodSymbol methodSymbol))
                 {
                     return;
                 }
 
-                if (!hasPureFunctionAttribute(methodSymbol))
+                bool transitive;
+                if (!tryGetPureFunctionAttribute(methodSymbol, out transitive))
                 {
                     return;
                 }
 
-                string methodName = methodSymbol.Name;
+                var callerType = methodSymbol.ContainingType;
+                var compilation = operationBlockContext.Compilation;
+                var visited = transitive
+                    ? new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default)
+                    : null;
 
-                // Register for assignment operations
-                operationBlockStartContext.RegisterOperationAction(
-                    operationContext => analyzeAssignment(operationContext, methodName),
-                    OperationKind.SimpleAssignment,
-                    OperationKind.CompoundAssignment,
-                    OperationKind.Increment,
-                    OperationKind.Decrement);
+                foreach (var operationBlock in operationBlockContext.OperationBlocks)
+                {
+                    var violations = new List<MutationViolation>();
+                    findMutations(operationBlock, callerType, compilation, visited,
+                        callChain: ImmutableArray<string>.Empty, violations: violations);
 
-                // Register for argument operations (ref/out)
-                operationBlockStartContext.RegisterOperationAction(
-                    operationContext => analyzeArgument(operationContext, methodName),
-                    OperationKind.Argument);
+                    foreach (var violation in violations)
+                    {
+                        string detail;
+
+                        if (violation.CallChain.Length == 0)
+                        {
+                            // Direct mutation in the [PureFunction] method
+                            detail = $"Assignment to instance {violation.MemberKind} '{violation.MemberName}' is not allowed here.";
+                        }
+                        else
+                        {
+                            // Transitive mutation via call chain
+                            var chain = string.Join(" \u2192 ", violation.CallChain);
+                            detail = $"Assignment to instance {violation.MemberKind} '{violation.MemberName}' is not allowed (via call chain: {methodSymbol.Name} \u2192 {chain}).";
+                        }
+
+                        operationBlockContext.ReportDiagnostic(Diagnostic.Create(
+                            rule,
+                            violation.Location,
+                            methodSymbol.Name,
+                            detail));
+                    }
+                }
             });
         }
 
-        private void analyzeAssignment(OperationAnalysisContext operationContext, string methodName)
+        // ════════════════════════════════════════════════════════════════
+        //  Core recursive mutation finder
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Recursively walks an operation tree looking for instance state mutations.
+        /// For invocations on <c>this</c> where the callee is a concrete non-virtual
+        /// method in the same compilation, recurses into the callee's body.
+        /// </summary>
+        private static void findMutations(
+            IOperation operation,
+            INamedTypeSymbol callerType,
+            Compilation compilation,
+            HashSet<IMethodSymbol>? visited,
+            ImmutableArray<string> callChain,
+            List<MutationViolation> violations)
         {
-            IOperation? target = null;
+            // Check this operation for direct mutations
+            checkOperationForMutation(operation, callChain, violations);
 
-            switch (operationContext.Operation)
+            // Check for transitive mutations via this.Method() calls
+            if (visited != null && operation is IInvocationOperation invocation)
             {
-                case ISimpleAssignmentOperation simpleAssignment:
-                    target = simpleAssignment.Target;
-                    break;
-                case ICompoundAssignmentOperation compoundAssignment:
-                    target = compoundAssignment.Target;
-                    break;
-                case IIncrementOrDecrementOperation incrementOrDecrement:
-                    target = incrementOrDecrement.Target;
-                    break;
+                checkTransitiveCall(invocation, callerType, compilation, visited, callChain, violations);
             }
 
-            if (target == null)
+            // Recurse into children
+            foreach (var child in operation.Children)
             {
-                return;
-            }
-
-            if (tryGetInstanceMemberInfo(target, out string? memberKind, out string? memberName))
-            {
-                operationContext.ReportDiagnostic(Diagnostic.Create(
-                    rule,
-                    operationContext.Operation.Syntax.GetLocation(),
-                    methodName,
-                    memberKind,
-                    memberName));
+                findMutations(child, callerType, compilation, visited, callChain, violations);
             }
         }
 
-        private void analyzeArgument(OperationAnalysisContext operationContext, string methodName)
+        /// <summary>
+        /// Checks a single operation for direct instance state mutation:
+        /// assignments, compound assignments, increment/decrement, and ref/out arguments.
+        /// </summary>
+        private static void checkOperationForMutation(
+            IOperation operation,
+            ImmutableArray<string> callChain,
+            List<MutationViolation> violations)
         {
-            var argumentOperation = (IArgumentOperation)operationContext.Operation;
+            switch (operation)
+            {
+                case ISimpleAssignmentOperation simpleAssignment:
+                    checkTarget(simpleAssignment.Target, operation, callChain, violations);
+                    break;
 
-            if (argumentOperation.Parameter == null)
+                case ICompoundAssignmentOperation compoundAssignment:
+                    checkTarget(compoundAssignment.Target, operation, callChain, violations);
+                    break;
+
+                case IIncrementOrDecrementOperation incrementOrDecrement:
+                    checkTarget(incrementOrDecrement.Target, operation, callChain, violations);
+                    break;
+
+                case IArgumentOperation argument:
+                    checkRefOutArgument(argument, callChain, violations);
+                    break;
+            }
+        }
+
+        private static void checkTarget(
+            IOperation target,
+            IOperation reportOn,
+            ImmutableArray<string> callChain,
+            List<MutationViolation> violations)
+        {
+            if (tryGetInstanceMemberInfo(target, out string? memberKind, out string? memberName))
+            {
+                violations.Add(new MutationViolation(
+                    reportOn.Syntax.GetLocation(), memberKind!, memberName!, callChain));
+            }
+        }
+
+        private static void checkRefOutArgument(
+            IArgumentOperation argument,
+            ImmutableArray<string> callChain,
+            List<MutationViolation> violations)
+        {
+            if (argument.Parameter == null)
             {
                 return;
             }
 
-            if (argumentOperation.Parameter.RefKind != RefKind.Ref &&
-                argumentOperation.Parameter.RefKind != RefKind.Out)
+            if (argument.Parameter.RefKind != RefKind.Ref &&
+                argument.Parameter.RefKind != RefKind.Out)
             {
                 return;
             }
 
-            // The value of a ref/out argument may be wrapped in a conversion or
-            // other transparent operation. Walk through to find the underlying reference.
-            var value = argumentOperation.Value;
+            var value = argument.Value;
 
-            // Unwrap IConversionOperation if present
-            while (value is IConversionOperation conversionOperation)
+            while (value is IConversionOperation conversion)
             {
-                value = conversionOperation.Operand;
+                value = conversion.Operand;
             }
 
             if (tryGetInstanceMemberInfo(value, out string? memberKind, out string? memberName))
             {
-                operationContext.ReportDiagnostic(Diagnostic.Create(
-                    rule,
-                    argumentOperation.Syntax.GetLocation(),
-                    methodName,
-                    memberKind,
-                    memberName));
+                violations.Add(new MutationViolation(
+                    argument.Syntax.GetLocation(), memberKind!, memberName!, callChain));
             }
         }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Transitive call analysis
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// If the invocation is a call on <c>this</c> to a concrete, non-virtual method
+        /// in the same compilation, resolve the callee's body and recursively check it
+        /// for mutations to our instance state.
+        /// </summary>
+        private static void checkTransitiveCall(
+            IInvocationOperation invocation,
+            INamedTypeSymbol callerType,
+            Compilation compilation,
+            HashSet<IMethodSymbol> visited,
+            ImmutableArray<string> callChain,
+            List<MutationViolation> violations)
+        {
+            var calleeMethod = invocation.TargetMethod;
+
+            // Only follow calls on 'this' (implicit or explicit).
+            // Calls on _logger, someParam, localVar, etc. are not our instance — skip.
+            if (invocation.Instance != null && !(invocation.Instance is IInstanceReferenceOperation))
+            {
+                return;
+            }
+
+            // Static calls don't mutate our instance
+            if (calleeMethod.IsStatic)
+            {
+                return;
+            }
+
+            // Skip virtual/abstract/interface calls — we can't know which override runs.
+            // Those overrides are independently enforced if they have [PureFunction].
+            if (calleeMethod.IsVirtual || calleeMethod.IsAbstract || calleeMethod.IsOverride)
+            {
+                return;
+            }
+
+            // Only follow methods on our own type (not base type methods we can't see)
+            if (!SymbolEqualityComparer.Default.Equals(calleeMethod.ContainingType, callerType))
+            {
+                return;
+            }
+
+            // Cycle guard
+            if (!visited.Add(calleeMethod))
+            {
+                return;
+            }
+
+            // Must be in the same compilation (we need the source body)
+            if (calleeMethod.DeclaringSyntaxReferences.Length == 0)
+            {
+                return;
+            }
+
+            // Get the callee's operation tree
+            var calleeSyntaxRef = calleeMethod.DeclaringSyntaxReferences[0];
+            var calleeSyntax = calleeSyntaxRef.GetSyntax();
+            var calleeSyntaxTree = calleeSyntax.SyntaxTree;
+            var semanticModel = compilation.GetSemanticModel(calleeSyntaxTree);
+            var calleeBodyOperation = semanticModel.GetOperation(calleeSyntax);
+
+            if (calleeBodyOperation == null)
+            {
+                return;
+            }
+
+            // Recurse with the callee name appended to the call chain
+            var extendedChain = callChain.Add(calleeMethod.Name);
+            findMutations(calleeBodyOperation, callerType, compilation, visited, extendedChain, violations);
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Instance member detection (unchanged from v1)
+        // ════════════════════════════════════════════════════════════════
 
         /// <summary>
         /// Checks whether an operation is a reference to an instance field or property on <c>this</c>.
@@ -136,7 +275,6 @@ namespace AN.CodeAnalyzers.PureFunction
             {
                 case IFieldReferenceOperation fieldRef
                     when fieldRef.Instance is IInstanceReferenceOperation:
-                    // Skip static fields (Instance would be null for statics, but guard explicitly)
                     if (fieldRef.Field.IsStatic)
                     {
                         memberKind = null;
@@ -166,19 +304,23 @@ namespace AN.CodeAnalyzers.PureFunction
             }
         }
 
+        // ════════════════════════════════════════════════════════════════
+        //  [PureFunction] attribute detection
+        // ════════════════════════════════════════════════════════════════
+
         /// <summary>
-        /// Checks if the method has [PureFunction] either directly or inherited via the override chain.
-        /// Roslyn's GetAttributes() only returns directly-applied attributes, so we must
-        /// manually walk the OverriddenMethod chain for Inherited = true behavior.
+        /// Checks if the method has [PureFunction] either directly or inherited via the
+        /// override chain or interface implementations. Returns the effective Transitive
+        /// value from the closest attribute found (default true).
         /// </summary>
-        private static bool hasPureFunctionAttribute(IMethodSymbol methodSymbol)
+        private static bool tryGetPureFunctionAttribute(IMethodSymbol methodSymbol, out bool transitive)
         {
-            // Walk the override chain
             var current = methodSymbol;
+            transitive = true;
 
             while (current != null)
             {
-                if (hasDirectPureFunctionAttribute(current))
+                if (tryGetDirectPureFunctionAttribute(current, out transitive))
                 {
                     return true;
                 }
@@ -186,16 +328,14 @@ namespace AN.CodeAnalyzers.PureFunction
                 current = current.OverriddenMethod;
             }
 
-            // Check explicit interface implementations
             foreach (var interfaceMethod in methodSymbol.ExplicitInterfaceImplementations)
             {
-                if (hasDirectPureFunctionAttribute(interfaceMethod))
+                if (tryGetDirectPureFunctionAttribute(interfaceMethod, out transitive))
                 {
                     return true;
                 }
             }
 
-            // Check implicit interface implementations
             foreach (var iface in methodSymbol.ContainingType.AllInterfaces)
             {
                 foreach (var ifaceMember in iface.GetMembers().OfType<IMethodSymbol>())
@@ -203,7 +343,7 @@ namespace AN.CodeAnalyzers.PureFunction
                     var implementation = methodSymbol.ContainingType.FindImplementationForInterfaceMember(ifaceMember);
 
                     if (SymbolEqualityComparer.Default.Equals(implementation, methodSymbol) &&
-                        hasDirectPureFunctionAttribute(ifaceMember))
+                        tryGetDirectPureFunctionAttribute(ifaceMember, out transitive))
                     {
                         return true;
                     }
@@ -213,11 +353,54 @@ namespace AN.CodeAnalyzers.PureFunction
             return false;
         }
 
-        private static bool hasDirectPureFunctionAttribute(IMethodSymbol methodSymbol)
+        private static bool tryGetDirectPureFunctionAttribute(IMethodSymbol methodSymbol, out bool transitive)
         {
-            return methodSymbol.GetAttributes().Any(attributeData =>
-                attributeData.AttributeClass?.Name == nameof(PureFunctionAttribute) ||
-                attributeData.AttributeClass?.Name == "PureFunction");
+            foreach (var attributeData in methodSymbol.GetAttributes())
+            {
+                if (attributeData.AttributeClass?.Name == nameof(PureFunctionAttribute) ||
+                    attributeData.AttributeClass?.Name == "PureFunction")
+                {
+                    // Read the Transitive named argument (default: true)
+                    transitive = true;
+
+                    foreach (var namedArg in attributeData.NamedArguments)
+                    {
+                        if (namedArg.Key == "Transitive" && namedArg.Value.Value is bool value)
+                        {
+                            transitive = value;
+                        }
+                    }
+
+                    return true;
+                }
+            }
+
+            transitive = true;
+            return false;
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Violation data
+        // ════════════════════════════════════════════════════════════════
+
+        private readonly struct MutationViolation
+        {
+            public readonly Location Location;
+            public readonly string MemberKind;
+            public readonly string MemberName;
+            public readonly ImmutableArray<string> CallChain;
+
+            public MutationViolation(
+                Location location,
+                string memberKind,
+                string memberName,
+                ImmutableArray<string> callChain)
+            {
+                Location = location;
+                MemberKind = memberKind;
+                MemberName = memberName;
+                CallChain = callChain;
+            }
         }
     }
 }

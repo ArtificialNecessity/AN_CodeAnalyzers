@@ -52,14 +52,22 @@ AN0501: Method 'Draw' is marked [PureFunction] and must not modify instance stat
 
 ## Detection Logic
 
-1. Register `SymbolStartAction` on `SymbolKind.Method` to check if the method has `[PureFunction]` (directly or inherited from base via override chain walk)
-2. Within that method, register `OperationAction` for assignment/increment operations
-3. For each `ISimpleAssignmentOperation`, `ICompoundAssignmentOperation`, `IIncrementOrDecrementOperation`:
+1. Register `OperationBlockAction` to get the full operation tree for each method
+2. Check if the method has `[PureFunction]` (directly or inherited via override chain walk, or via interface implementation)
+3. Recursively walk the operation tree via `findMutations()`
+4. For each `ISimpleAssignmentOperation`, `ICompoundAssignmentOperation`, `IIncrementOrDecrementOperation`:
    - Check if the target is an `IFieldReferenceOperation` or `IPropertyReferenceOperation` where `Instance` is `IInstanceReferenceOperation` (i.e., `this`)
    - If yes → report AN0501
-4. For each `IArgumentOperation` with `ref`/`out` parameter:
+5. For each `IArgumentOperation` with `ref`/`out` parameter:
    - Check if the value is an instance field reference
    - If yes → report AN0501
+6. **Transitive checking:** For each `IInvocationOperation` on `this`:
+   - Only follow concrete, non-virtual, non-override methods on the same type
+   - Resolve the callee's syntax → `SemanticModel` → `IOperation` tree
+   - Recurse into the callee's body with the same mutation checks
+   - `HashSet<IMethodSymbol>` prevents infinite loops on cyclic calls
+   - Calls on other objects (`_logger.AddLine()`, `param.DoThing()`) are **not** followed — only `this` instance mutations matter
+   - Diagnostic message includes the call chain: `Draw → DrawHeader → ResetState`
 
 **Note:** Roslyn's `GetAttributes()` only returns directly-applied attributes. `Inherited = true` is a runtime reflection concept. The analyzer must manually walk the `OverriddenMethod` chain to detect inherited `[PureFunction]`.
 
@@ -118,8 +126,9 @@ Add to existing `AN.CodeAnalyzers` project following the per-analyzer directory 
 
 No MSBuild property needed — this analyzer is purely attribute-driven, always enabled.
 
-## Future (v2)
+## Future (v3)
 
-- Optional transitive checking via `[PureFunction(Transitive = true)]` — also flag calls to methods NOT marked `[PureFunction]`
+- ~~Transitive checking~~ — **DONE in v2** (concrete non-virtual `this` calls, same type, same compilation)
+- Require callees to be `[PureFunction]`-marked via `[PureFunction(StrictTransitive = true)]` — flag calls to methods NOT marked `[PureFunction]`
 - Flag `event += handler` subscription changes in pure methods
 - Flag static field mutation (currently allowed)
