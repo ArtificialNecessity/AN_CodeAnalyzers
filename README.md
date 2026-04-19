@@ -25,6 +25,7 @@ This repository produces two independent NuGet packages:
 | **EnforceNamingConventions** | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**         | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                   |
 | **PublicConstAnalyzer**   | AN0002 | Warning: `public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                   |
+| **PureFunction**          | AN0501 | Flags instance state mutation inside `[PureFunction]` methods. Attribute-driven, `Inherited = true` so overrides are automatically constrained. Error severity. |
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
 | **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration. |
 | **JsonPeek** | —     | MSBuild task + standalone CLI tool that reads values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic. |
@@ -336,6 +337,60 @@ public class MathConstants
     public const int MaxRetries = 3;            // AN0002 warning
 }
 ```
+
+### AN0501: PureFunction — no instance state mutation
+
+Flags any instance state mutation inside methods marked with `[PureFunction]`. Designed to enforce side-effect-free methods for render passes, layout measurement, and hit testing — especially when LLMs keep putting state mutation logic in `Draw()` and other methods that must be pure.
+
+**Always enabled** — no MSBuild property needed. Purely attribute-driven.
+
+`Inherited = true` on the attribute means overrides automatically inherit the constraint. Mark the base method once, every override is enforced.
+
+**What it flags (Error severity):**
+
+| Mutation Type | Example | Flagged? |
+|---|---|---|
+| Field assignment | `_foo = 5` | ✅ YES |
+| Field compound assignment | `_count += 1` | ✅ YES |
+| Field increment/decrement | `_counter++` | ✅ YES |
+| Property setter | `Visible = false` | ✅ YES |
+| `this.field = x` | `this._cache = data` | ✅ YES |
+| `ref`/`out` instance field | `SomeMethod(ref _field)` | ✅ YES |
+| Local variable assignment | `var x = 5; x = 6;` | ❌ NO — locals are fine |
+| Parameter assignment | `param = 3` | ❌ NO |
+| Static field assignment | `s_globalCount++` | ❌ NO — v1 keeps it simple |
+| Method calls on instance | `DoLayout()` | ❌ NO — not checked transitively |
+| Method calls on fields | `_list.Add(x)` | ❌ NO — too deep for v1 |
+| Event raise | `StateChanged?.Invoke()` | ❌ NO |
+
+**Example:**
+
+```csharp
+using AN.CodeAnalyzers.PureFunction;
+
+public abstract class FView
+{
+    [PureFunction]
+    public virtual void Draw(FDrawContext dc) { }
+}
+
+public class FCodeView : FView
+{
+    private bool _needsRecalc;
+
+    public override void Draw(FDrawContext dc)
+    {
+        _needsRecalc = false;  // AN0501 error
+
+        var localTemp = 5;
+        localTemp = 6;         // Fine — local variable
+
+        DrawLines(dc);         // Fine — not checked transitively
+    }
+}
+```
+
+See [`_TASKS/An0501_PureFunctionNoInstanceWrites.md`](_TASKS/An0501_PureFunctionNoInstanceWrites.md) for the full specification.
 
 ### StableABI Snapshot Verification
 

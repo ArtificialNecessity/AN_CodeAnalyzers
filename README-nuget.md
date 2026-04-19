@@ -13,6 +13,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 | **EnforceNamingConventions**  | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**             | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                              |
 | **PublicConstAnalyzer**       | AN0002 | Warning:`public const` values are inlined into callers at compile time. Suppressible with `[PermanentConst]`.                                                                              |
+| **PureFunction**              | AN0501 | Flags instance state mutation inside `[PureFunction]` methods. Attribute-driven, `Inherited = true` so overrides are automatically constrained. Error severity. |
 | **StableABIVerification**     | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
 | **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration.                                                   |
 | **JsonPeek**                  | —     | MSBuild task + standalone CLI tool that reads and writes individual values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic.                                          |
@@ -162,6 +163,43 @@ public class MathConstants
     public const double Pi = 3.14159265358979;  // no warning
   
     public const int MaxRetries = 3;            // AN0002 warning
+}
+```
+
+### AN0501: PureFunction — no instance state mutation
+
+Flags any instance state mutation inside methods marked with `[PureFunction]`. Designed to enforce side-effect-free methods for render passes, layout measurement, and hit testing.
+
+**Always enabled** — no MSBuild property needed. Purely attribute-driven.
+
+`Inherited = true` on the attribute means overrides automatically inherit the constraint. Mark the base method once, every override is enforced.
+
+**What it flags (Error):** field assignment, compound assignment, increment/decrement, property setter, `ref`/`out` instance field.
+
+**What it allows:** local variables, parameters, static fields, method calls (no transitive checking in v1), event raises.
+
+**Example:**
+
+```csharp
+using AN.CodeAnalyzers.PureFunction;
+
+public abstract class FView
+{
+    [PureFunction]
+    public virtual void Draw(FDrawContext dc) { }
+}
+
+public class FCodeView : FView
+{
+    private bool _needsRecalc;
+
+    public override void Draw(FDrawContext dc)
+    {
+        _needsRecalc = false;  // AN0501 error
+
+        var localTemp = 5;
+        localTemp = 6;         // Fine — local variable
+    }
 }
 ```
 

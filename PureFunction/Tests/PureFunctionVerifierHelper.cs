@@ -1,0 +1,77 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Testing;
+using Microsoft.CodeAnalysis.Testing;
+using AN.CodeAnalyzers.PureFunction;
+
+namespace AN.CodeAnalyzers.Tests.PureFunction
+{
+    /// <summary>
+    /// Helper to build and run <see cref="PureFunctionAnalyzer"/> verification tests.
+    /// Embeds the PureFunctionAttribute source so test compilations can resolve it.
+    /// </summary>
+    public static class PureFunctionVerifierHelper
+    {
+        /// <summary>
+        /// Source text for the attribute that the analyzer checks for.
+        /// Included in every test so the test compilation can resolve it.
+        /// </summary>
+        private const string attributeSourceText = @"
+using System;
+
+namespace AN.CodeAnalyzers.PureFunction
+{
+    [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
+    public sealed class PureFunctionAttribute : Attribute { }
+}
+";
+
+        /// <summary>
+        /// Creates a test that expects NO diagnostics from the given source code.
+        /// </summary>
+        public static CSharpAnalyzerTest<PureFunctionAnalyzer, DefaultVerifier> CreateNoDiagnosticsTest(
+            string sourceCode)
+        {
+            var analyzerTest = new CSharpAnalyzerTest<PureFunctionAnalyzer, DefaultVerifier>
+            {
+                TestCode = sourceCode,
+            };
+
+            analyzerTest.TestState.Sources.Add(("PureFunctionAttribute.cs", attributeSourceText));
+
+            return analyzerTest;
+        }
+
+        /// <summary>
+        /// Creates a test that expects specific diagnostics from the given source code.
+        /// Use <c>{|#0:code|}</c> markup in source to mark expected diagnostic locations.
+        /// </summary>
+        public static CSharpAnalyzerTest<PureFunctionAnalyzer, DefaultVerifier> CreateDiagnosticsTest(
+            string sourceCode,
+            DiagnosticResult[] expectedDiagnostics)
+        {
+            var analyzerTest = new CSharpAnalyzerTest<PureFunctionAnalyzer, DefaultVerifier>
+            {
+                TestCode = sourceCode,
+            };
+
+            analyzerTest.TestState.Sources.Add(("PureFunctionAttribute.cs", attributeSourceText));
+            analyzerTest.ExpectedDiagnostics.AddRange(expectedDiagnostics);
+
+            return analyzerTest;
+        }
+
+        /// <summary>
+        /// Builds a <see cref="DiagnosticResult"/> for AN0501 at the given markup location index.
+        /// </summary>
+        public static DiagnosticResult ExpectAN0501Error(
+            int markupIndex,
+            string methodName,
+            string memberKind,
+            string memberName)
+        {
+            return new DiagnosticResult(PureFunctionAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+                .WithLocation(markupIndex)
+                .WithArguments(methodName, memberKind, memberName);
+        }
+    }
+}
