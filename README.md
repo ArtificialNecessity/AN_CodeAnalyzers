@@ -28,6 +28,7 @@ This repository produces two independent NuGet packages:
 | **StableABIVerification** | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
 | **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration. |
 | **JsonPeek** | —     | MSBuild task + standalone CLI tool that reads values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic. |
+| **ClassLibInfo** | —     | Library + standalone CLI tool that generates dense API surface dumps from compiled assemblies using System.Reflection.Metadata. Outputs HJSON or keyword-prefixed flat text. Designed for AI context windows. |
 
 ## Installation
 
@@ -88,6 +89,15 @@ AN_CodeAnalyzers/
 │   ├── AssemblyManagedOnly.cs           (public API: LoadFrom, Load, IsManagedOnly, GetViolations)
 │   ├── ManagedAssemblyInspector.cs      (PE metadata scanning engine)
 │   ├── ManagedOnlyViolationException.cs
+│   └── Tests/
+├── ClassLibInfo/                        ← API surface dump generator
+│   ├── ClassLibInfoLib.csproj           (library: ApiDumpGenerator, netstandard2.0)
+│   ├── ApiDumpGenerator.cs              (SRM-based, reads compiled DLL → HJSON or flat text)
+│   ├── ApiDumpSignatureProvider.cs      (SRM SignatureDecoder provider)
+│   ├── FlatTextFormatter.cs             (keyword-prefixed flat text output)
+│   ├── XmlDocCommentReader.cs           (XML doc comment extraction)
+│   ├── ClassLibInfoTool/                (standalone CLI: ClassLibInfo.exe)
+│   │   └── AN.CodeAnalyzers.ClassLibInfo.Tool.csproj
 │   └── Tests/
 ├── build/
 │   └── AN.CodeAnalyzers.targets
