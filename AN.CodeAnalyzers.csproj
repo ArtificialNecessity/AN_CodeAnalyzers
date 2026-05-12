@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -56,6 +56,12 @@
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeekTask.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\Hjson.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <!-- Pack the ClassLibInfo CLI tool (net8.0 framework-dependent exe) in the tools/ directory -->
+    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.exe" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.deps.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfoLib.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
   </ItemGroup>
 
   <!-- ════════════════════════════════════════════════════════════════
