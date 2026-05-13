@@ -15,17 +15,17 @@ namespace AN.CodeAnalyzers.ClassLibInfo.Tool
             }
 
             string inputDllPath = commandLineArgs[0];
-            string visibilityScope = "public";
             string outputFormat = "hjson";
             string? outputFilePath = null;
+            bool includeInternals = false;
 
             // Parse optional args
             for (int argIndex = 1; argIndex < commandLineArgs.Length; argIndex++)
             {
                 string currentArg = commandLineArgs[argIndex];
-                if (currentArg == "--visibility" && argIndex + 1 < commandLineArgs.Length)
+                if (currentArg == "--include-private-and-internal")
                 {
-                    visibilityScope = commandLineArgs[++argIndex];
+                    includeInternals = true;
                 }
                 else if (currentArg == "--format" && argIndex + 1 < commandLineArgs.Length)
                 {
@@ -38,7 +38,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo.Tool
             }
 
             var dumpOptions = new ApiDumpOptions {
-                VisibilityScope = visibilityScope,
+                IncludeInternals = includeInternals,
                 OutputFormat = outputFormat
             };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(inputDllPath, dumpOptions);
@@ -64,7 +64,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo.Tool
             Console.Error.WriteLine("  ClassLibInfo --project <path.csproj> --output <dir> [options]");
             Console.Error.WriteLine();
             Console.Error.WriteLine("Options:");
-            Console.Error.WriteLine("  --visibility public|all    Visibility scope (default: public)");
+            Console.Error.WriteLine("  --include-private-and-internal  Include all private/internal members (default: public+protected only)");
             Console.Error.WriteLine("  --doc-comments none|brief|full  Doc comment extraction (default: brief)");
             Console.Error.WriteLine("  --include-transitive       Include transitive NuGet dependencies");
             Console.Error.WriteLine("  --framework <tfm>          Target framework for multi-targeting projects");

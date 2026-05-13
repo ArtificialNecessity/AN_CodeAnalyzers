@@ -132,7 +132,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsNamespace()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("TestLib:", hjsonOutput);
@@ -141,7 +141,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsClassWithModifiers()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("Calculator:", hjsonOutput);
@@ -152,7 +152,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsStaticClass()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("StringUtils:", hjsonOutput);
@@ -162,7 +162,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsMethodWithArgs()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("Add:", hjsonOutput);
@@ -174,7 +174,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsEnum()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("ColorChannel:", hjsonOutput);
@@ -187,7 +187,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsGenericType()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("Container<T>:", hjsonOutput);
@@ -196,7 +196,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsGenericMethod()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("Transform:", hjsonOutput);
@@ -206,7 +206,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsProperty()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("LastResult:", hjsonOutput);
@@ -218,7 +218,7 @@ namespace TestLib
         [Fact]
         public void HjsonFormat_ContainsConst()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "hjson" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "hjson" };
             string hjsonOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("MaxPrecision:", hjsonOutput);
@@ -233,7 +233,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsNamespace()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("namespace TestLib", flatOutput);
@@ -242,7 +242,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsClassDeclaration()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("class Calculator [public]", flatOutput);
@@ -251,7 +251,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsMethodKeyword()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("method int Add(int leftOperand, int rightOperand)", flatOutput);
@@ -260,7 +260,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsEnumValues()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("enum ColorChannel [public]", flatOutput);
@@ -271,7 +271,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsPropertyKeyword()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("prop double LastResult { get; set; }", flatOutput);
@@ -280,7 +280,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsConstKeyword()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("const int MaxPrecision = 15", flatOutput);
@@ -289,7 +289,7 @@ namespace TestLib
         [Fact]
         public void FlatFormat_ContainsStaticClassModifier()
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = "public", OutputFormat = "flat" };
+            var dumpOptions = new ApiDumpOptions { OutputFormat = "flat" };
             string flatOutput = ApiDumpGenerator.GenerateApiDump(_testAssemblyDllPath, dumpOptions);
 
             Assert.Contains("class StringUtils [public, static]", flatOutput);

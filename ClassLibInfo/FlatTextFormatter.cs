@@ -29,7 +29,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             // Header
             string assemblyName = metadataReader.GetString(metadataReader.GetAssemblyDefinition().Name);
             var assemblyVersion = metadataReader.GetAssemblyDefinition().Version;
-            outputBuilder.AppendLine($"// {assemblyName} {assemblyVersion} — {dumpOptions.VisibilityScope} API via SRM");
+            string scopeLabel = dumpOptions.IncludeInternals ? "all" : "public+protected";
+            outputBuilder.AppendLine($"// {assemblyName} {assemblyVersion} — {scopeLabel} API via SRM");
             outputBuilder.AppendLine("//");
 
             var sortedNamespaces = new List<string>(typesByNamespace.Keys);
@@ -146,18 +147,20 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             // Constructors
             foreach (var methodHandle in typeDef.GetMethods()) {
                 var methodDef = metadataReader.GetMethodDefinition(methodHandle);
-                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.IncludeInternals)) continue;
                 string methodName = metadataReader.GetString(methodDef.Name);
                 if (methodName != ".ctor") continue;
 
                 string paramList = buildParamList(methodDef, typeGenericContext, metadataReader);
-                outputBuilder.AppendLine($"{memberIndent}ctor({paramList})");
+                string ctorVis = getMemberVisibilityLabel(methodDef.Attributes);
+                string ctorVisPrefix = ctorVis != "public" ? $"{ctorVis} " : "";
+                outputBuilder.AppendLine($"{memberIndent}{ctorVisPrefix}ctor({paramList})");
             }
 
             // Methods
             foreach (var methodHandle in typeDef.GetMethods()) {
                 var methodDef = metadataReader.GetMethodDefinition(methodHandle);
-                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.IncludeInternals)) continue;
 
                 string methodName = metadataReader.GetString(methodDef.Name);
                 if (methodName == ".ctor" || methodName == ".cctor") continue;
@@ -181,7 +184,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 }
 
                 string paramList = buildParamList(methodDef, methodGenericContext, metadataReader);
-                outputBuilder.AppendLine($"{memberIndent}method {decodedSig.ReturnType} {displayMethodName}({paramList})");
+                string methodVis = getMemberVisibilityLabel(methodDef.Attributes);
+                string methodVisPrefix = methodVis != "public" ? $"{methodVis} " : "";
+                outputBuilder.AppendLine($"{memberIndent}{methodVisPrefix}method {decodedSig.ReturnType} {displayMethodName}({paramList})");
             }
 
             // Properties
@@ -192,9 +197,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
                 var accessors = propDef.GetAccessors();
                 bool getterInScope = !accessors.Getter.IsNil && memberMatchesScope(
-                    metadataReader.GetMethodDefinition(accessors.Getter).Attributes, dumpOptions.VisibilityScope);
+                    metadataReader.GetMethodDefinition(accessors.Getter).Attributes, dumpOptions.IncludeInternals);
                 bool setterInScope = !accessors.Setter.IsNil && memberMatchesScope(
-                    metadataReader.GetMethodDefinition(accessors.Setter).Attributes, dumpOptions.VisibilityScope);
+                    metadataReader.GetMethodDefinition(accessors.Setter).Attributes, dumpOptions.IncludeInternals);
                 if (!getterInScope && !setterInScope) continue;
 
                 string accessorDesc;
@@ -202,14 +207,22 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 else if (getterInScope) accessorDesc = "{ get; }";
                 else accessorDesc = "{ set; }";
 
-                outputBuilder.AppendLine($"{memberIndent}prop {propSig.ReturnType} {propName} {accessorDesc}");
+                // Determine property visibility from most visible accessor
+                string propVis = "private";
+                if (getterInScope) propVis = getMemberVisibilityLabel(metadataReader.GetMethodDefinition(accessors.Getter).Attributes);
+                if (setterInScope) {
+                    string setVis = getMemberVisibilityLabel(metadataReader.GetMethodDefinition(accessors.Setter).Attributes);
+                    if (setVis == "public" || (setVis == "protected internal" && propVis != "public")) propVis = setVis;
+                }
+                string propVisPrefix = propVis != "public" ? $"{propVis} " : "";
+                outputBuilder.AppendLine($"{memberIndent}{propVisPrefix}prop {propSig.ReturnType} {propName} {accessorDesc}");
             }
 
             // Fields (non-const)
             foreach (var fieldHandle in typeDef.GetFields()) {
                 var fieldDef = metadataReader.GetFieldDefinition(fieldHandle);
                 if ((fieldDef.Attributes & FieldAttributes.Literal) != 0) continue;
-                if (!fieldMatchesScope(fieldDef, dumpOptions.VisibilityScope)) continue;
+                if (!fieldMatchesScope(fieldDef, dumpOptions.IncludeInternals)) continue;
                 string fieldName = metadataReader.GetString(fieldDef.Name);
                 if (fieldName.StartsWith("<")) continue;
 
@@ -217,7 +230,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 bool isStatic = (fieldDef.Attributes & FieldAttributes.Static) != 0;
                 bool isReadonly = (fieldDef.Attributes & FieldAttributes.InitOnly) != 0;
 
-                string modifiers = "";
+                string fieldVis = getFieldVisibilityLabel(fieldDef.Attributes);
+                string modifiers = fieldVis != "public" ? $"{fieldVis} " : "";
                 if (isStatic) modifiers += "static ";
                 if (isReadonly) modifiers += "readonly ";
 
@@ -228,7 +242,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             foreach (var fieldHandle in typeDef.GetFields()) {
                 var fieldDef = metadataReader.GetFieldDefinition(fieldHandle);
                 if ((fieldDef.Attributes & FieldAttributes.Literal) == 0) continue;
-                if (!fieldMatchesScope(fieldDef, dumpOptions.VisibilityScope)) continue;
+                if (!fieldMatchesScope(fieldDef, dumpOptions.IncludeInternals)) continue;
                 string fieldName = metadataReader.GetString(fieldDef.Name);
                 string fieldTypeName = fieldDef.DecodeSignature(_signatureProvider, typeGenericContext);
 
@@ -237,7 +251,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 var constant = metadataReader.GetConstant(constantHandle);
                 string formattedValue = formatConstantValue(constant, metadataReader);
 
-                outputBuilder.AppendLine($"{memberIndent}const {fieldTypeName} {fieldName} = {formattedValue}");
+                string constVis = getFieldVisibilityLabel(fieldDef.Attributes);
+                string constVisPrefix = constVis != "public" ? $"{constVis} " : "";
+                outputBuilder.AppendLine($"{memberIndent}{constVisPrefix}const {fieldTypeName} {fieldName} = {formattedValue}");
             }
 
             // Events
@@ -246,13 +262,15 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 string eventName = metadataReader.GetString(eventDef.Name);
                 var eventAccessors = eventDef.GetAccessors();
                 if (eventAccessors.Adder.IsNil) continue;
-                if (!memberMatchesScope(metadataReader.GetMethodDefinition(eventAccessors.Adder).Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(metadataReader.GetMethodDefinition(eventAccessors.Adder).Attributes, dumpOptions.IncludeInternals)) continue;
 
                 var adderMethod = metadataReader.GetMethodDefinition(eventAccessors.Adder);
                 var adderSig = adderMethod.DecodeSignature(_signatureProvider, typeGenericContext);
                 string eventTypeName = adderSig.ParameterTypes.Length > 0 ? adderSig.ParameterTypes[0] : "?";
 
-                outputBuilder.AppendLine($"{memberIndent}event {eventTypeName} {eventName}");
+                string eventVis = getMemberVisibilityLabel(adderMethod.Attributes);
+                string eventVisPrefix = eventVis != "public" ? $"{eventVis} " : "";
+                outputBuilder.AppendLine($"{memberIndent}{eventVisPrefix}event {eventTypeName} {eventName}");
             }
         }
 
@@ -361,16 +379,52 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             }
         }
 
-        private static bool memberMatchesScope(MethodAttributes methodAttributes, string visibilityScope)
+        private static bool memberMatchesScope(MethodAttributes methodAttributes, bool includeInternals)
         {
-            if (visibilityScope == "all") return true;
-            return (methodAttributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
+            if (includeInternals) return true;
+            var accessibility = methodAttributes & MethodAttributes.MemberAccessMask;
+            return accessibility == MethodAttributes.Public
+                || accessibility == MethodAttributes.Family
+                || accessibility == MethodAttributes.FamORAssem;
         }
 
-        private static bool fieldMatchesScope(FieldDefinition fieldDef, string visibilityScope)
+        private static bool fieldMatchesScope(FieldDefinition fieldDef, bool includeInternals)
         {
-            if (visibilityScope == "all") return true;
-            return (fieldDef.Attributes & FieldAttributes.FieldAccessMask) == FieldAttributes.Public;
+            if (includeInternals) return true;
+            var accessibility = fieldDef.Attributes & FieldAttributes.FieldAccessMask;
+            return accessibility == FieldAttributes.Public
+                || accessibility == FieldAttributes.Family
+                || accessibility == FieldAttributes.FamORAssem;
+        }
+
+        private static string getMemberVisibilityLabel(MethodAttributes methodAttributes)
+        {
+            var accessibility = methodAttributes & MethodAttributes.MemberAccessMask;
+            switch (accessibility)
+            {
+                case MethodAttributes.Public: return "public";
+                case MethodAttributes.Family: return "protected";
+                case MethodAttributes.FamORAssem: return "protected internal";
+                case MethodAttributes.Assembly: return "internal";
+                case MethodAttributes.FamANDAssem: return "private protected";
+                case MethodAttributes.Private: return "private";
+                default: return "private";
+            }
+        }
+
+        private static string getFieldVisibilityLabel(FieldAttributes fieldAttributes)
+        {
+            var accessibility = fieldAttributes & FieldAttributes.FieldAccessMask;
+            switch (accessibility)
+            {
+                case FieldAttributes.Public: return "public";
+                case FieldAttributes.Family: return "protected";
+                case FieldAttributes.FamORAssem: return "protected internal";
+                case FieldAttributes.Assembly: return "internal";
+                case FieldAttributes.FamANDAssem: return "private protected";
+                case FieldAttributes.Private: return "private";
+                default: return "private";
+            }
         }
 
         private static bool hasAttribute(TypeDefinition typeDef, MetadataReader metadataReader, string fullAttributeName)

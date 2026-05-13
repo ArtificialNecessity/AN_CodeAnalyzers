@@ -15,8 +15,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
     /// </summary>
     public sealed class ApiDumpOptions
     {
-        /// <summary>"public" for public types only, "all" for all types.</summary>
-        public string VisibilityScope { get; set; } = "public";
+        /// <summary>When true, includes private and internal members (not just the public+protected API surface).</summary>
+        public bool IncludeInternals { get; set; } = false;
 
         /// <summary>"hjson" for structured HJSON, "flat" for keyword-prefixed text.</summary>
         public string OutputFormat { get; set; } = "hjson";
@@ -76,7 +76,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             // Header comment
             string assemblyName = metadataReader.GetString(metadataReader.GetAssemblyDefinition().Name);
             var assemblyVersion = metadataReader.GetAssemblyDefinition().Version;
-            hjsonBuilder.AppendLine($"  // {assemblyName} {assemblyVersion} — {dumpOptions.VisibilityScope} API via SRM");
+            string scopeLabel = dumpOptions.IncludeInternals ? "all" : "public+protected";
+            hjsonBuilder.AppendLine($"  // {assemblyName} {assemblyVersion} — {scopeLabel} API via SRM");
             hjsonBuilder.AppendLine();
 
             // Sort namespaces for stable output
@@ -106,9 +107,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
         /// <summary>
         /// Overload that returns List&lt;string&gt; for backward compatibility with placeholder tests.
         /// </summary>
-        public static List<string> GenerateApiDump(string assemblyFilePath, string visibilityScope)
+        public static List<string> GenerateApiDump(string assemblyFilePath, bool includeInternals = false)
         {
-            var dumpOptions = new ApiDumpOptions { VisibilityScope = visibilityScope };
+            var dumpOptions = new ApiDumpOptions { IncludeInternals = includeInternals };
             string hjsonOutput = GenerateApiDump(assemblyFilePath, dumpOptions);
             return new List<string>(hjsonOutput.Split(new[] { '\n' }, StringSplitOptions.None));
         }
@@ -145,7 +146,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 if (isCompilerGenerated(typeName)) continue;
 
                 // Scope filtering
-                if (!typeMatchesScope(typeDef, dumpOptions.VisibilityScope, metadataReader)) continue;
+                if (!typeMatchesScope(typeDef, dumpOptions.IncludeInternals, metadataReader)) continue;
 
                 if (!typesByNamespace.TryGetValue(namespaceName, out var typeList))
                 {
@@ -315,7 +316,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             foreach (var methodHandle in typeDef.GetMethods())
             {
                 var methodDef = metadataReader.GetMethodDefinition(methodHandle);
-                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.IncludeInternals)) continue;
                 string methodName = metadataReader.GetString(methodDef.Name);
                 if (methodName != ".ctor") continue;
 
@@ -345,7 +346,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             foreach (var methodHandle in typeDef.GetMethods())
             {
                 var methodDef = metadataReader.GetMethodDefinition(methodHandle);
-                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(methodDef.Attributes, dumpOptions.IncludeInternals)) continue;
 
                 string methodName = metadataReader.GetString(methodDef.Name);
                 if (methodName == ".ctor" || methodName == ".cctor") continue;
@@ -431,9 +432,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
                 var accessors = propDef.GetAccessors();
                 bool getterInScope = !accessors.Getter.IsNil && memberMatchesScope(
-                    metadataReader.GetMethodDefinition(accessors.Getter).Attributes, dumpOptions.VisibilityScope);
+                    metadataReader.GetMethodDefinition(accessors.Getter).Attributes, dumpOptions.IncludeInternals);
                 bool setterInScope = !accessors.Setter.IsNil && memberMatchesScope(
-                    metadataReader.GetMethodDefinition(accessors.Setter).Attributes, dumpOptions.VisibilityScope);
+                    metadataReader.GetMethodDefinition(accessors.Setter).Attributes, dumpOptions.IncludeInternals);
                 if (!getterInScope && !setterInScope) continue;
 
                 var propParts = new List<string>();
@@ -470,7 +471,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             {
                 var fieldDef = metadataReader.GetFieldDefinition(fieldHandle);
                 if ((fieldDef.Attributes & FieldAttributes.Literal) != 0) continue;
-                if (!fieldMatchesScope(fieldDef, dumpOptions.VisibilityScope)) continue;
+                if (!fieldMatchesScope(fieldDef, dumpOptions.IncludeInternals)) continue;
                 string fieldName = metadataReader.GetString(fieldDef.Name);
                 if (fieldName.StartsWith("<")) continue;
 
@@ -501,7 +502,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             {
                 var fieldDef = metadataReader.GetFieldDefinition(fieldHandle);
                 if ((fieldDef.Attributes & FieldAttributes.Literal) == 0) continue;
-                if (!fieldMatchesScope(fieldDef, dumpOptions.VisibilityScope)) continue;
+                if (!fieldMatchesScope(fieldDef, dumpOptions.IncludeInternals)) continue;
                 string fieldName = metadataReader.GetString(fieldDef.Name);
                 string fieldTypeName = fieldDef.DecodeSignature(_signatureProvider, typeGenericContext);
 
@@ -533,7 +534,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 string eventName = metadataReader.GetString(eventDef.Name);
                 var eventAccessors = eventDef.GetAccessors();
                 if (eventAccessors.Adder.IsNil) continue;
-                if (!memberMatchesScope(metadataReader.GetMethodDefinition(eventAccessors.Adder).Attributes, dumpOptions.VisibilityScope)) continue;
+                if (!memberMatchesScope(metadataReader.GetMethodDefinition(eventAccessors.Adder).Attributes, dumpOptions.IncludeInternals)) continue;
 
                 var adderMethod = metadataReader.GetMethodDefinition(eventAccessors.Adder);
                 var adderSig = adderMethod.DecodeSignature(_signatureProvider, typeGenericContext);
@@ -620,9 +621,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
         // Scope filtering
         // ──────────────────────────────────────────────
 
-        private static bool typeMatchesScope(TypeDefinition typeDef, string visibilityScope, MetadataReader metadataReader)
+        private static bool typeMatchesScope(TypeDefinition typeDef, bool includeInternals, MetadataReader metadataReader)
         {
-            if (visibilityScope == "all") return true;
+            if (includeInternals) return true;
             return isTypePubliclyVisible(typeDef, metadataReader);
         }
 
@@ -632,7 +633,7 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
             if (typeDef.IsNested)
             {
-                if (visibility != TypeAttributes.NestedPublic) return false;
+                if (visibility != TypeAttributes.NestedPublic && visibility != TypeAttributes.NestedFamily && visibility != TypeAttributes.NestedFamORAssem) return false;
                 var declaringTypeHandle = typeDef.GetDeclaringType();
                 var declaringTypeDef = metadataReader.GetTypeDefinition(declaringTypeHandle);
                 return isTypePubliclyVisible(declaringTypeDef, metadataReader);
@@ -641,18 +642,18 @@ namespace AN.CodeAnalyzers.ClassLibInfo
             return visibility == TypeAttributes.Public;
         }
 
-        private static bool memberMatchesScope(MethodAttributes methodAttributes, string visibilityScope)
+        private static bool memberMatchesScope(MethodAttributes methodAttributes, bool includeInternals)
         {
-            if (visibilityScope == "all") return true;
+            if (includeInternals) return true;
             var accessibility = methodAttributes & MethodAttributes.MemberAccessMask;
             return accessibility == MethodAttributes.Public
                 || accessibility == MethodAttributes.Family
                 || accessibility == MethodAttributes.FamORAssem;
         }
 
-        private static bool fieldMatchesScope(FieldDefinition fieldDef, string visibilityScope)
+        private static bool fieldMatchesScope(FieldDefinition fieldDef, bool includeInternals)
         {
-            if (visibilityScope == "all") return true;
+            if (includeInternals) return true;
             var accessibility = fieldDef.Attributes & FieldAttributes.FieldAccessMask;
             return accessibility == FieldAttributes.Public
                 || accessibility == FieldAttributes.Family
