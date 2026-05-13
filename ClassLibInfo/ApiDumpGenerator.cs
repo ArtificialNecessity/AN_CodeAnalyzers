@@ -320,9 +320,14 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 if (methodName != ".ctor") continue;
 
                 string argsHjson = buildArgsHjson(methodDef, typeGenericContext, metadataReader);
-                ctorObjects.Add(string.IsNullOrEmpty(argsHjson)
+                string ctorVis = getMemberVisibilityLabel(methodDef.Attributes);
+                var ctorParts = new List<string>();
+                if (ctorVis != "public") ctorParts.Add($"vis: {ctorVis}");
+                if (!string.IsNullOrEmpty(argsHjson)) ctorParts.Add($"args: {{ {argsHjson} }}");
+
+                ctorObjects.Add(ctorParts.Count == 0
                     ? "{ }"
-                    : $"{{ args: {{ {argsHjson} }} }}");
+                    : "{ " + string.Join(", ", ctorParts) + " }");
             }
 
             if (ctorObjects.Count > 0)
@@ -355,6 +360,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
                 // Build overload object parts
                 var overloadParts = new List<string>();
+                string methodVis = getMemberVisibilityLabel(methodDef.Attributes);
+                if (methodVis != "public") overloadParts.Add($"vis: {methodVis}");
                 overloadParts.Add($"rtn: {hjsonSafeValue(decodedSig.ReturnType)}");
 
                 // Generic type parameters
@@ -430,6 +437,16 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 if (!getterInScope && !setterInScope) continue;
 
                 var propParts = new List<string>();
+                // Determine property-level visibility (most visible accessor)
+                string propVis = "private";
+                if (getterInScope) {
+                    propVis = getMemberVisibilityLabel(metadataReader.GetMethodDefinition(accessors.Getter).Attributes);
+                }
+                if (setterInScope) {
+                    string setVis = getMemberVisibilityLabel(metadataReader.GetMethodDefinition(accessors.Setter).Attributes);
+                    if (setVis == "public" || (setVis == "protected internal" && propVis != "public")) propVis = setVis;
+                }
+                if (propVis != "public") propParts.Add($"vis: {propVis}");
                 propParts.Add($"type: {hjsonSafeValue(propSig.ReturnType)}");
                 if (getterInScope) propParts.Add("get: true");
                 if (setterInScope) propParts.Add("set: true");
@@ -459,6 +476,8 @@ namespace AN.CodeAnalyzers.ClassLibInfo
 
                 string fieldTypeName = fieldDef.DecodeSignature(_signatureProvider, typeGenericContext);
                 var fieldParts = new List<string>();
+                string fieldVis = getFieldVisibilityLabel(fieldDef.Attributes);
+                if (fieldVis != "public") fieldParts.Add($"vis: {fieldVis}");
                 fieldParts.Add($"type: {hjsonSafeValue(fieldTypeName)}");
                 if ((fieldDef.Attributes & FieldAttributes.Static) != 0) fieldParts.Add("static: true");
                 if ((fieldDef.Attributes & FieldAttributes.InitOnly) != 0) fieldParts.Add("readonly: true");
@@ -491,7 +510,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 var constant = metadataReader.GetConstant(constantHandle);
                 string formattedValue = formatConstantValue(constant, metadataReader);
 
-                constEntries.Add($"{ind2}{fieldName}: {{ type: {hjsonSafeValue(fieldTypeName)}, value: {formattedValue} }}");
+                string constVis = getFieldVisibilityLabel(fieldDef.Attributes);
+                string constVisPart = constVis != "public" ? $"vis: {constVis}, " : "";
+                constEntries.Add($"{ind2}{fieldName}: {{ {constVisPart}type: {hjsonSafeValue(fieldTypeName)}, value: {formattedValue} }}");
             }
 
             if (constEntries.Count > 0)
@@ -518,7 +539,9 @@ namespace AN.CodeAnalyzers.ClassLibInfo
                 var adderSig = adderMethod.DecodeSignature(_signatureProvider, typeGenericContext);
                 string eventTypeName = adderSig.ParameterTypes.Length > 0 ? adderSig.ParameterTypes[0] : "?";
 
-                eventEntries.Add($"{ind2}{eventName}: {{ type: {hjsonSafeValue(eventTypeName)} }}");
+                string eventVis = getMemberVisibilityLabel(adderMethod.Attributes);
+                string eventVisPart = eventVis != "public" ? $"vis: {eventVis}, " : "";
+                eventEntries.Add($"{ind2}{eventName}: {{ {eventVisPart}type: {hjsonSafeValue(eventTypeName)} }}");
             }
 
             if (eventEntries.Count > 0)
@@ -622,14 +645,48 @@ namespace AN.CodeAnalyzers.ClassLibInfo
         {
             if (visibilityScope == "all") return true;
             var accessibility = methodAttributes & MethodAttributes.MemberAccessMask;
-            return accessibility == MethodAttributes.Public;
+            return accessibility == MethodAttributes.Public
+                || accessibility == MethodAttributes.Family
+                || accessibility == MethodAttributes.FamORAssem;
         }
 
         private static bool fieldMatchesScope(FieldDefinition fieldDef, string visibilityScope)
         {
             if (visibilityScope == "all") return true;
             var accessibility = fieldDef.Attributes & FieldAttributes.FieldAccessMask;
-            return accessibility == FieldAttributes.Public;
+            return accessibility == FieldAttributes.Public
+                || accessibility == FieldAttributes.Family
+                || accessibility == FieldAttributes.FamORAssem;
+        }
+
+        private static string getMemberVisibilityLabel(MethodAttributes methodAttributes)
+        {
+            var accessibility = methodAttributes & MethodAttributes.MemberAccessMask;
+            switch (accessibility)
+            {
+                case MethodAttributes.Public: return "public";
+                case MethodAttributes.Family: return "protected";
+                case MethodAttributes.FamORAssem: return "protected internal";
+                case MethodAttributes.Assembly: return "internal";
+                case MethodAttributes.FamANDAssem: return "private protected";
+                case MethodAttributes.Private: return "private";
+                default: return "private";
+            }
+        }
+
+        private static string getFieldVisibilityLabel(FieldAttributes fieldAttributes)
+        {
+            var accessibility = fieldAttributes & FieldAttributes.FieldAccessMask;
+            switch (accessibility)
+            {
+                case FieldAttributes.Public: return "public";
+                case FieldAttributes.Family: return "protected";
+                case FieldAttributes.FamORAssem: return "protected internal";
+                case FieldAttributes.Assembly: return "internal";
+                case FieldAttributes.FamANDAssem: return "private protected";
+                case FieldAttributes.Private: return "private";
+                default: return "private";
+            }
         }
 
         // ──────────────────────────────────────────────

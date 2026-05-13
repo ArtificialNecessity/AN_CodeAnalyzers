@@ -41,12 +41,12 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Pack AN.CodeAnalyzers
 Write-Host "`n[2/3] Packing AN.CodeAnalyzers..." -ForegroundColor Green
-dotnet pack "$repoRoot\AN.CodeAnalyzers.csproj" -c $configuration /p:NewRelease=true
+dotnet pack "$repoRoot\AN.CodeAnalyzers.csproj" -c $configuration /p:NewRelease=true /nodeReuse:false
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Pack SaferAssemblyLoader
 Write-Host "`n[3/3] Packing SaferAssemblyLoader..." -ForegroundColor Green
-dotnet pack "$repoRoot\SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj" -c $configuration /p:NewRelease=true
+dotnet pack "$repoRoot\SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj" -c $configuration /p:NewRelease=true /nodeReuse:false
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Deploy packages to local feed (NewRelease=true skips the in-project DeployToLocalNuGet target)
