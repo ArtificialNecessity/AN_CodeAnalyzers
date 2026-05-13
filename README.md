@@ -514,6 +514,72 @@ JsonPeek config.hjson database.host
 | `KeyPath` | Input (required) | Dot-separated key path (e.g. `version` or `parent.child.key`) |
 | `Value` | Output | The extracted value as a string |
 
+### ClassLibInfo
+
+A library and standalone CLI tool that generates dense API surface dumps from compiled .NET assemblies using `System.Reflection.Metadata` (SRM). Reads PE metadata directly — no runtime loading of the target assembly. Designed to produce compact, AI-friendly output for use in LLM context windows.
+
+**Default behavior:** Dumps the **public + protected** API surface (the inheritable contract). Public members have no visibility annotation; protected members are explicitly labeled.
+
+**CLI usage:**
+
+```bash
+# Dump public+protected API surface (default)
+ClassLibInfo MyLibrary.dll
+
+# Write output to a file
+ClassLibInfo MyLibrary.dll output.api.hjson
+
+# Use flat text format instead of HJSON
+ClassLibInfo MyLibrary.dll --format flat
+
+# Include ALL members (private, internal, etc.)
+ClassLibInfo MyLibrary.dll --include-private-and-internal
+```
+
+**Output formats:**
+
+| Format | Flag | Description |
+|--------|------|-------------|
+| HJSON (default) | `--format hjson` | Structured HJSON with namespaces as top-level keys, types as nested objects, members as arrays |
+| Flat text | `--format flat` | Keyword-prefixed lines (`class`, `method`, `prop`, `field`, `const`, `event`) — one declaration per line |
+
+**Visibility annotations:**
+- Public members: no annotation (implicit default)
+- Protected members: `vis: protected` (HJSON) or `protected` prefix (flat)
+- Protected internal: `vis: protected internal` (HJSON) or `protected internal` prefix (flat)
+- When `--include-private-and-internal` is used, all visibility levels are annotated
+
+**HJSON output example:**
+
+```hjson
+{
+  // MyLibrary 1.0.0.0 — public+protected API via SRM
+
+  MyNamespace: {
+    MyBaseClass: { kind: class, vis: public, abstract: true
+      ctors: [
+        { vis: protected, args: { name: string } }
+      ]
+      methods: {
+        DoWork: [{ rtn: void, args: { input: string } }]
+        OnDispose: [{ vis: protected, rtn: void, args: { disposing: bool } }]
+      }
+      properties: {
+        Name: { type: string, get: true }
+        InternalState: { vis: protected, type: int, get: true, set: true }
+      }
+    }
+  }
+}
+```
+
+**CLI flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--format hjson\|flat` | Output format (default: `hjson`) |
+| `--include-private-and-internal` | Include all private/internal members (default: public+protected only) |
+
 ## SaferAssemblyLoader
 
 A standalone runtime library that loads .NET assemblies with a managed-only guarantee. Inspects PE metadata **before** loading — if the assembly contains `[DllImport]`, `IntPtr`, `Marshal.*` calls, or unsafe IL, it throws before the assembly enters your AppDomain.

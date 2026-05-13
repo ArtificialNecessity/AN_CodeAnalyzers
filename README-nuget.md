@@ -17,6 +17,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 | **StableABIVerification**     | —     | MSBuild task that maintains a `$(AssemblyName).stableapi` file tracking all binary-level values baked into callers. (more thorough version of `Microsoft.CodeAnalysis.PublicApiAnalyzers`) |
 | **VerifyUserConfigGitignore** | —     | MSBuild pre-build task that verifies user-config files are properly gitignored to prevent accidental commits of per-developer configuration.                                                   |
 | **JsonPeek**                  | —     | MSBuild task + standalone CLI tool that reads and writes individual values from JSON/JSONC/HJSON files by dot-separated key path. Extension-agnostic.                                          |
+| **ClassLibInfo**              | —     | Library + standalone CLI tool that generates dense API surface dumps from compiled assemblies. Outputs HJSON or flat text. Designed for AI context windows. |
 
 ## Installation
 
@@ -326,6 +327,34 @@ JsonPeek config.hjson database.host
 | `File`    | Input (required) | Path to the JSON/JSONC/HJSON file                                |
 | `KeyPath` | Input (required) | Dot-separated key path (e.g.`version` or `parent.child.key`) |
 | `Value`   | Output           | The extracted value as a string                                  |
+
+### ClassLibInfo
+
+A standalone CLI tool that generates dense API surface dumps from compiled .NET assemblies using `System.Reflection.Metadata`. Reads PE metadata directly — no runtime loading of the target assembly. Designed for AI context windows.
+
+**CLI usage:**
+
+```bash
+# Dump public+protected API (default)
+ClassLibInfo MyLibrary.dll
+
+# Output to file, flat text format
+ClassLibInfo MyLibrary.dll output.api.txt --format flat
+
+# Include private/internal members
+ClassLibInfo MyLibrary.dll --include-private-and-internal
+```
+
+**Output formats:** HJSON (default) or keyword-prefixed flat text (`--format flat`).
+
+**Visibility:** By default, dumps the public + protected API surface. Protected members are annotated (`vis: protected` in HJSON, `protected` prefix in flat text). Public members have no annotation.
+
+**CLI flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--format hjson\|flat` | Output format (default: `hjson`) |
+| `--include-private-and-internal` | Include all private/internal members |
 
 ## License
 
