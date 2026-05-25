@@ -23,10 +23,10 @@ AN_CodeAnalyzers/
 ├── AN.CodeAnalyzers.csproj                  ← Main analyzer DLL (netstandard2.0, packed as NuGet)
 ├── build/
 │   └── ArtificialNecessity.CodeAnalyzers.targets  ← MSBuild .targets shipped in NuGet package
-├── version.json                             ← Version metadata (major.minor + buildNumberOffset)
-├── buildnum.txt                             ← Auto-incremented local build counter
+├── AN.CodeAnalyzers.shared.Build.props      ← Shared build infrastructure (versioning, NuGet deploy)
 │
 ├── ExplicitEnums/                           ← AN0001: Enum members must have explicit values
+│   ├── ExplicitEnumValuesAnalyzer.cs
 │   ├── ExplicitEnumValuesAnalyzer.cs
 │   ├── RequireExplicitEnumValuesAttribute.cs
 │   ├── SuppressExplicitEnumValuesAttribute.cs
@@ -162,11 +162,17 @@ The `AN.CodeAnalyzers.csproj` packs everything into a single NuGet:
 
 ### Versioning
 
-Two MSBuild targets compute the version:
-- **`GeneratePrereleaseVersion`** (default): `{major}.{minor}.{offset}-{gitHeight}.{buildNum}.g{hash}`
-- **`GenerateReleaseVersion`** (with `/p:NewRelease=true`): Clean `{major}.{minor}.{newOffset}`
+Timestamp-based versioning (v2) via `AN.CodeAnalyzers.shared.Build.props`. Every build
+gets a unique version automatically — no version files, no generated props, no scripts.
 
-Both read from `version.json` using the JsonPeek CLI tool.
+```
+AssemblyVersion      = {major}.{YYMM}.{DDHH}.{mmss}
+FileVersion          = (same)
+Version              = {major}.{YYMM}.{DDHH}          (3-segment, used as PackageVersion)
+InformationalVersion = {AssemblyVersion}-{MACHINE}+g{gitshort}
+```
+
+Just `dotnet build` — zero ceremony.
 
 ---
 

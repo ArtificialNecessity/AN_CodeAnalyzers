@@ -1,5 +1,8 @@
 #!/usr/bin/env pwsh
-# build.ps1 — Build prerelease package and deploy to local NuGet feed
+# build.ps1 — Build and deploy to local NuGet feed
+#
+# Versioning is timestamp-based (v2) — every build gets a unique version
+# automatically via AN.CodeAnalyzers.shared.Build.props.
 #
 # Usage:
 #   .\cmd\build.ps1              # build + deploy to local feed

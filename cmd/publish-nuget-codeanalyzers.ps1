@@ -1,9 +1,12 @@
 #!/usr/bin/env pwsh
-# publish-nuget.ps1 — Build a release package and push to NuGet.org
+# publish-nuget-codeanalyzers.ps1 — Build a release package and push to NuGet.org
+#
+# Versioning is timestamp-based (v2) — every build gets a unique version
+# automatically via AN.CodeAnalyzers.shared.Build.props. No version files to manage.
 #
 # Usage (from anywhere):
-#   .\cmd\publish-nuget.ps1          # pack + push
-#   .\cmd\publish-nuget.ps1 -DryRun  # pack only, show what would be pushed
+#   .\cmd\publish-nuget-codeanalyzers.ps1          # pack + push
+#   .\cmd\publish-nuget-codeanalyzers.ps1 -DryRun  # pack only, show what would be pushed
 #
 param(
     [switch]$DryRun
@@ -18,16 +21,17 @@ $csprojPath = Join-Path $projectRoot 'AN.CodeAnalyzers.csproj'
 $releaseOutputDir = Join-Path (Join-Path $projectRoot 'bin') 'Release'
 $localNuGetFeedPath = 'C:\PROJECTS\LocalNuGet'
 
-Write-Host "`n=== Packing release ===" -ForegroundColor Cyan
-dotnet pack $csprojPath -c Release /p:NewRelease=true
+Write-Host "`n=== Packing AN.CodeAnalyzers release ===" -ForegroundColor Cyan
+$packTimestamp = Get-Date
+dotnet pack $csprojPath -c Release
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: dotnet pack failed with exit code $LASTEXITCODE" -ForegroundColor Red
     exit $LASTEXITCODE
 }
 
-# Find the newest .nupkg (excluding prerelease packages with '-' in version)
+# Find the newest .nupkg created during this run
 $newestReleasePackage = Get-ChildItem (Join-Path $releaseOutputDir 'ArtificialNecessity.CodeAnalyzers.*.nupkg') |
-    Where-Object { $_.Name -notmatch '\d+-\d+' } |
+    Where-Object { $_.LastWriteTime -ge $packTimestamp } |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 

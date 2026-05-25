@@ -1,0 +1,93 @@
+<!--
+  AN.CodeAnalyzers.shared.Build.props - Shared Build Infrastructure for AN_CodeAnalyzers packages
+
+  This file is explicitly imported by packable project .csproj files.
+  It provides:
+    1. Timestamp-based versioning (v2) — unique version per build, zero ceremony
+    2. Local NuGet feed deployment via LOCAL_NUGET_REPO env var
+
+  NOT auto-discovered — must be explicitly imported via:
+    <Import Project="$(MSBuildThisFileDirectory)AN.CodeAnalyzers.shared.Build.props" />
+  or similar relative path from the importing .csproj file.
+-->
+<Project>
+
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <RepositoryRootDirectory>$(MSBuildThisFileDirectory)</RepositoryRootDirectory>
+  </PropertyGroup>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       Local NuGet feed: set LOCAL_NUGET_REPO env var to deploy packages
+       after 'dotnet pack'. Only affects projects with IsPackable=true.
+       Use cmd/publish-local.ps1 to build+pack+deploy in one step.
+       ══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <LocalNuGetFeedPath>$(LOCAL_NUGET_REPO)</LocalNuGetFeedPath>
+  </PropertyGroup>
+
+  <!-- Deploy .nupkg to local NuGet feed after pack -->
+  <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != ''">
+    <MakeDir Directories="$(LocalNuGetFeedPath)" Condition="!Exists('$(LocalNuGetFeedPath)')" />
+    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+          DestinationFolder="$(LocalNuGetFeedPath)"
+          OverwriteReadOnlyFiles="true" />
+    <Message Importance="High" Text="$(PackageId): Deployed $(PackageId).$(PackageVersion).nupkg to $(LocalNuGetFeedPath)" />
+  </Target>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       Timestamp-based versioning (v2). Every build gets a unique version
+       automatically — no version.jsonc, no generated files, no scripts.
+
+       Format:
+         AssemblyVersion      = {major}.{YYMM}.{DDHH}.{mmss}
+         FileVersion          = (same as AssemblyVersion)
+         Version              = {major}.{YYMM}.{DDHH}
+         InformationalVersion = {AssemblyVersion}-{MACHINE}+g{gitshort}
+
+       Example (2026-05-25 17:22:07 UTC):
+         AssemblyVersion:      0.2605.2517.2207
+         InformationalVersion: 0.2605.2517.2207-WORKHORSE+ga1b2c3d
+
+       All timestamps are UTC. Each segment stays ≤ 65535.
+       Just 'dotnet build' — zero ceremony.
+       ══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <ANCodeAnalyzersMajorVersion>0</ANCodeAnalyzersMajorVersion>
+    <_BuildYYMM>$([System.DateTime]::UtcNow.ToString("yyMM"))</_BuildYYMM>
+    <_BuildDDHH>$([System.DateTime]::UtcNow.ToString("ddHH"))</_BuildDDHH>
+    <_Buildmmss>$([System.DateTime]::UtcNow.ToString("mmss"))</_Buildmmss>
+    <VersionPrefix>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMM).$(_BuildDDHH).$(_Buildmmss)</VersionPrefix>
+    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+    <FileVersion>$(VersionPrefix)</FileVersion>
+    <Version>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMM).$(_BuildDDHH)</Version>
+  </PropertyGroup>
+
+  <!-- Suppress SDK's automatic SourceRevisionId — we handle git hash ourselves -->
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <!-- Git short hash resolved at build time -->
+  <Target Name="_ResolveGitHash" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo;BeforeBuild">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true"
+          StandardOutputImportance="low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitShortHash" />
+    </Exec>
+    <PropertyGroup>
+      <_GitShortHash Condition="'$(_GitShortHash)' == ''">unknown</_GitShortHash>
+      <InformationalVersion>$(VersionPrefix)-$([System.Environment]::MachineName)+g$(_GitShortHash)</InformationalVersion>
+    </PropertyGroup>
+    <Message Importance="High" Text="$(MSBuildProjectName): version $(VersionPrefix)" />
+  </Target>
+
+  <!-- For packable projects, set PackageVersion = Version (3-segment for NuGet) -->
+  <Target Name="_SetPackageVersion"
+          BeforeTargets="GenerateNuspecDependencies;GetPackageVersionInfo;Pack"
+          Condition="'$(IsPackable)' == 'true'">
+    <PropertyGroup>
+      <PackageVersion>$(Version)</PackageVersion>
+    </PropertyGroup>
+  </Target>
+
+</Project>
