@@ -42,25 +42,29 @@
        Format:
          AssemblyVersion      = {major}.{YYMM}.{DDHH}.{mmss}
          FileVersion          = (same as AssemblyVersion)
-         Version              = {major}.{YYMM}.{DDHH}
+         Version              = {major}.{YYMMDD}.{HHmmss}
          InformationalVersion = {AssemblyVersion}-{MACHINE}+g{gitshort}
 
-       Example (2026-05-25 17:22:07 UTC):
+       Example (2026-05-25 17:22:07 local):
          AssemblyVersion:      0.2605.2517.2207
-         InformationalVersion: 0.2605.2517.2207-WORKHORSE+ga1b2c3d
+         Version/PackageVersion: 0.260525.172207
+         InformationalVersion:   0.2605.2517.2207-WORKHORSE+ga1b2c3d
 
-       All timestamps are UTC. Each segment stays ≤ 65535.
+       All timestamps are local time. AssemblyVersion segments stay ≤ 65535.
        Just 'dotnet build' — zero ceremony.
        ══════════════════════════════════════════════════════════════════ -->
   <PropertyGroup>
     <ANCodeAnalyzersMajorVersion>0</ANCodeAnalyzersMajorVersion>
-    <_BuildYYMM>$([System.DateTime]::UtcNow.ToString("yyMM"))</_BuildYYMM>
-    <_BuildDDHH>$([System.DateTime]::UtcNow.ToString("ddHH"))</_BuildDDHH>
-    <_Buildmmss>$([System.DateTime]::UtcNow.ToString("mmss"))</_Buildmmss>
-    <VersionPrefix>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMM).$(_BuildDDHH).$(_Buildmmss)</VersionPrefix>
-    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
-    <FileVersion>$(VersionPrefix)</FileVersion>
-    <Version>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMM).$(_BuildDDHH)</Version>
+    <!-- AssemblyVersion segments (ushort-constrained, split timestamp) -->
+    <_BuildYYMM>$([System.DateTime]::Now.ToString("yyMM"))</_BuildYYMM>
+    <_BuildDDHH>$([System.DateTime]::Now.ToString("ddHH"))</_BuildDDHH>
+    <_Buildmmss>$([System.DateTime]::Now.ToString("mmss"))</_Buildmmss>
+    <AssemblyVersion>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMM).$(_BuildDDHH).$(_Buildmmss)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <!-- PackageVersion segments (NuGet, no ushort constraint — full date+time) -->
+    <_BuildYYMMDD>$([System.DateTime]::Now.ToString("yyMMdd"))</_BuildYYMMDD>
+    <_BuildHHmmss>$([System.DateTime]::Now.ToString("HHmmss"))</_BuildHHmmss>
+    <Version>$(ANCodeAnalyzersMajorVersion).$(_BuildYYMMDD).$(_BuildHHmmss)</Version>
   </PropertyGroup>
 
   <!-- Suppress SDK's automatic SourceRevisionId — we handle git hash ourselves -->
@@ -76,9 +80,9 @@
     </Exec>
     <PropertyGroup>
       <_GitShortHash Condition="'$(_GitShortHash)' == ''">unknown</_GitShortHash>
-      <InformationalVersion>$(VersionPrefix)-$([System.Environment]::MachineName)+g$(_GitShortHash)</InformationalVersion>
+      <InformationalVersion>$(AssemblyVersion)-$([System.Environment]::MachineName)+g$(_GitShortHash)</InformationalVersion>
     </PropertyGroup>
-    <Message Importance="High" Text="$(MSBuildProjectName): version $(VersionPrefix)" />
+    <Message Importance="High" Text="$(MSBuildProjectName): version $(AssemblyVersion)" />
   </Target>
 
   <!-- For packable projects, set PackageVersion = Version (3-segment for NuGet) -->

@@ -168,7 +168,7 @@ gets a unique version automatically — no version files, no generated props, no
 ```
 AssemblyVersion      = {major}.{YYMM}.{DDHH}.{mmss}
 FileVersion          = (same)
-Version              = {major}.{YYMM}.{DDHH}          (3-segment, used as PackageVersion)
+Version              = {major}.{YYMMDD}.{HHmmss}      (3-segment, used as PackageVersion)
 InformationalVersion = {AssemblyVersion}-{MACHINE}+g{gitshort}
 ```
 
