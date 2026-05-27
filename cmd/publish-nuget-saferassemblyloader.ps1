@@ -17,8 +17,8 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve project root (one level up from cmd/)
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$csprojPath = Join-Path $projectRoot 'SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj'
-$releaseOutputDir = Join-Path $projectRoot 'SaferAssemblyLoader\bin\Release'
+$csprojPath = Join-Path $projectRoot 'src\SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj'
+$releaseOutputDir = Join-Path $projectRoot 'src\SaferAssemblyLoader\bin\Release'
 $localNuGetFeedPath = 'C:\PROJECTS\LocalNuGet'
 
 Write-Host "`n=== Packing SaferAssemblyLoader release ===" -ForegroundColor Cyan

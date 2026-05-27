@@ -17,8 +17,8 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve project root (one level up from cmd/)
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$csprojPath = Join-Path $projectRoot 'AN.CodeAnalyzers.csproj'
-$releaseOutputDir = Join-Path (Join-Path $projectRoot 'bin') 'Release'
+$csprojPath = Join-Path $projectRoot 'src\AN.CodeAnalyzers.csproj'
+$releaseOutputDir = Join-Path $projectRoot 'src\bin\Release'
 $localNuGetFeedPath = 'C:\PROJECTS\LocalNuGet'
 
 Write-Host "`n=== Packing AN.CodeAnalyzers release ===" -ForegroundColor Cyan

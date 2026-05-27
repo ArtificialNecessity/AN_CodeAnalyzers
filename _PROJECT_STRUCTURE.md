@@ -158,7 +158,7 @@ The `AN.CodeAnalyzers.csproj` packs everything into a single NuGet:
 - `analyzers/dotnet/cs/` — The analyzer DLL itself
 - `build/` — The `.targets` file (auto-imported by consuming projects)
 - `tasks/netstandard2.0/` — MSBuild task DLLs (StableABI, VerifyGitignore, JsonPeek)
-- `tools/net8.0/any/` — CLI tools (JsonPeek.exe)
+- `tools/net8.0/any/` — CLI tools (invoked via `dotnet JsonPeek.dll`, `dotnet ClassLibInfo.dll`)
 
 ### Versioning
 

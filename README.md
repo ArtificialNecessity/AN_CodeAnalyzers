@@ -82,7 +82,7 @@ AN_CodeAnalyzers/
 │   ├── CoreTools.csproj                 (assembly: JsonPeekTask.dll, netstandard2.0)
 │   ├── JsonPeekParser.cs                (HJSON/JSON/JSONC parser)
 │   ├── JsonPeekTask.cs                  (MSBuild Task: JsonPeek)
-│   ├── JsonPeekTool/                    (standalone CLI: JsonPeek.exe)
+│   ├── JsonPeekTool/                    (standalone CLI: dotnet JsonPeek.dll)
 │   │   └── AN.CodeAnalyzers.JsonPeek.Tool.csproj
 │   └── Tests/
 ├── SaferAssemblyLoader/                 ← standalone runtime library (separate NuGet package)
@@ -97,7 +97,7 @@ AN_CodeAnalyzers/
 │   ├── ApiDumpSignatureProvider.cs      (SRM SignatureDecoder provider)
 │   ├── FlatTextFormatter.cs             (keyword-prefixed flat text output)
 │   ├── XmlDocCommentReader.cs           (XML doc comment extraction)
-│   ├── ClassLibInfoTool/                (standalone CLI: ClassLibInfo.exe)
+│   ├── ClassLibInfoTool/                (standalone CLI: dotnet ClassLibInfo.dll)
 │   │   └── AN.CodeAnalyzers.ClassLibInfo.Tool.csproj
 │   └── Tests/
 ├── build/

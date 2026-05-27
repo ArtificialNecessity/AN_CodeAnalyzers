@@ -3,97 +3,97 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers", "AN.CodeAnalyzers.csproj", "{757F172E-67B8-5EB6-4CF4-89525E99336C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers", "src/AN.CodeAnalyzers.csproj", "{757F172E-67B8-5EB6-4CF4-89525E99336C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExplicitEnums", "ExplicitEnums", "{F042792B-BFFC-5BF0-AB3F-7177C07E471D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{ECC03FB2-4BC2-77AA-844E-324640BB2748}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ExplicitEnums.Tests", "ExplicitEnums\Tests\AN.CodeAnalyzers.ExplicitEnums.Tests.csproj", "{2CFE1D25-F683-4DEF-AF93-79AD9532B045}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ExplicitEnums.Tests", "src/ExplicitEnums\Tests\AN.CodeAnalyzers.ExplicitEnums.Tests.csproj", "{2CFE1D25-F683-4DEF-AF93-79AD9532B045}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StableABIVerification", "StableABIVerification\StableABIVerification.csproj", "{EDB3CA40-6565-4762-954A-E158EA5E99DD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StableABIVerification", "src/StableABIVerification\StableABIVerification.csproj", "{EDB3CA40-6565-4762-954A-E158EA5E99DD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PublicConstAnalyzer", "PublicConstAnalyzer", "{131DA531-4BB6-FCA3-DE60-1EE66C2AC1DF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{D05D1C49-B493-3934-946F-E0D2F55E44D6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.PublicConstAnalyzer.Tests", "PublicConstAnalyzer\Tests\AN.CodeAnalyzers.PublicConstAnalyzer.Tests.csproj", "{9DD14A5A-A3B3-46E5-AE9C-923E19FCBD6C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.PublicConstAnalyzer.Tests", "src/PublicConstAnalyzer\Tests\AN.CodeAnalyzers.PublicConstAnalyzer.Tests.csproj", "{9DD14A5A-A3B3-46E5-AE9C-923E19FCBD6C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AN.CodeAnalyzers.StableABIVerification", "AN.CodeAnalyzers.StableABIVerification", "{B7ADB069-97FD-999C-98A1-9F61EB96A922}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{2080343E-6D78-4C7A-E32A-CBB0094F5A03}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.StableABIVerification.Tests", "StableABIVerification\Tests\AN.CodeAnalyzers.StableABIVerification.Tests.csproj", "{9C153600-B2DD-48D7-81E6-A3991E56A9A7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.StableABIVerification.Tests", "src/StableABIVerification\Tests\AN.CodeAnalyzers.StableABIVerification.Tests.csproj", "{9C153600-B2DD-48D7-81E6-A3991E56A9A7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerifyUserConfigGitignore", "VerifyUserConfigGitignore\VerifyUserConfigGitignore.csproj", "{42C25FF0-AA6E-49F3-B487-2947D57DD889}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerifyUserConfigGitignore", "src/VerifyUserConfigGitignore\VerifyUserConfigGitignore.csproj", "{42C25FF0-AA6E-49F3-B487-2947D57DD889}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AN.CodeAnalyzers.VerifyUserConfigGitignore", "AN.CodeAnalyzers.VerifyUserConfigGitignore", "{18163C68-E895-AC67-FC6D-ACA6819A9127}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{053211ED-5F6E-3A6F-9AB2-9BDC9B8C24DD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.VerifyUserConfigGitignore.Tests", "VerifyUserConfigGitignore\Tests\AN.CodeAnalyzers.VerifyUserConfigGitignore.Tests.csproj", "{253672E6-11BA-4F15-8FF2-6BA86665D5C2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.VerifyUserConfigGitignore.Tests", "src/VerifyUserConfigGitignore\Tests\AN.CodeAnalyzers.VerifyUserConfigGitignore.Tests.csproj", "{253672E6-11BA-4F15-8FF2-6BA86665D5C2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreTools", "CoreTools\CoreTools.csproj", "{0E2A545D-F1AF-426F-967D-0E5E6CBC2803}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreTools", "src/CoreTools\CoreTools.csproj", "{0E2A545D-F1AF-426F-967D-0E5E6CBC2803}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AN.CodeAnalyzers.CoreTools", "AN.CodeAnalyzers.CoreTools", "{6C7BB8A2-5C2E-843C-A261-33F5B0FB6614}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "JsonPeekTool", "JsonPeekTool", "{06703695-5BBE-68FE-BB38-5EE9C664C579}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.JsonPeek.Tool", "CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj", "{817CFBED-5B23-47AD-8BB9-42E840938202}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.JsonPeek.Tool", "src/CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj", "{817CFBED-5B23-47AD-8BB9-42E840938202}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{D94B8987-55F8-B874-BF25-19369F63BDC0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.JsonPeek.Tests", "CoreTools\Tests\AN.CodeAnalyzers.JsonPeek.Tests.csproj", "{2408085D-7B8C-4B81-BCA9-CC9A83E728BD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.JsonPeek.Tests", "src/CoreTools\Tests\AN.CodeAnalyzers.JsonPeek.Tests.csproj", "{2408085D-7B8C-4B81-BCA9-CC9A83E728BD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ClassLibInfo.Tool", "ClassLibInfo\ClassLibInfoTool\AN.CodeAnalyzers.ClassLibInfo.Tool.csproj", "{C3C24F4A-1F80-486D-AB6B-373DEE5E8225}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ClassLibInfo.Tool", "src/ClassLibInfo\ClassLibInfoTool\AN.CodeAnalyzers.ClassLibInfo.Tool.csproj", "{C3C24F4A-1F80-486D-AB6B-373DEE5E8225}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ClassLibInfo.Tests", "ClassLibInfo\Tests\AN.CodeAnalyzers.ClassLibInfo.Tests.csproj", "{51F823FD-24AD-4115-A53C-B6D2AA988EDD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ClassLibInfo.Tests", "src/ClassLibInfo\Tests\AN.CodeAnalyzers.ClassLibInfo.Tests.csproj", "{51F823FD-24AD-4115-A53C-B6D2AA988EDD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClassLibInfoLib", "ClassLibInfo\ClassLibInfoLib.csproj", "{0D95DD56-C6B9-482D-9D80-FDA208923A15}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClassLibInfoLib", "src/ClassLibInfo\ClassLibInfoLib.csproj", "{0D95DD56-C6B9-482D-9D80-FDA208923A15}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "RequireTypedPointersNotIntPtr", "RequireTypedPointersNotIntPtr", "{A9485A17-1D56-7DE0-F664-FA8D895BA32F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{F02182EB-3FF5-38E5-414E-A2A52A6AF38D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.Tests", "RequireTypedPointersNotIntPtr\Tests\AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.Tests.csproj", "{61887F4A-5EE5-41FB-BE44-130502F73557}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.Tests", "src/RequireTypedPointersNotIntPtr\Tests\AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.Tests.csproj", "{61887F4A-5EE5-41FB-BE44-130502F73557}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ArtificialNecessity.SaferAssemblyLoader", "ArtificialNecessity.SaferAssemblyLoader", "{46B8B6B5-E45C-2879-A459-E68A8353DC7B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtificialNecessity.SaferAssemblyLoader", "SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj", "{EC1ACEB1-CDA1-4B9F-88C7-DEDACDF947E4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtificialNecessity.SaferAssemblyLoader", "src/SaferAssemblyLoader\ArtificialNecessity.SaferAssemblyLoader.csproj", "{EC1ACEB1-CDA1-4B9F-88C7-DEDACDF947E4}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{1BBB693B-47EA-521D-2BDA-A6A626E9A630}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.SaferAssemblyLoader.Tests", "SaferAssemblyLoader\Tests\AN.SaferAssemblyLoader.Tests.csproj", "{14F6E0F0-B3C7-43FE-948F-BB847C8E1FC8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.SaferAssemblyLoader.Tests", "src/SaferAssemblyLoader\Tests\AN.SaferAssemblyLoader.Tests.csproj", "{14F6E0F0-B3C7-43FE-948F-BB847C8E1FC8}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EnforceNamingConventions", "EnforceNamingConventions", "{F2996D19-7238-053F-0A35-EA4F7C141691}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0314D241-B6C1-5301-DB90-FD736F3E573F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.EnforceNamingConventions.Tests", "EnforceNamingConventions\Tests\AN.CodeAnalyzers.EnforceNamingConventions.Tests.csproj", "{CD570ADE-705B-4902-8AFB-3C2D9516153E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.EnforceNamingConventions.Tests", "src/EnforceNamingConventions\Tests\AN.CodeAnalyzers.EnforceNamingConventions.Tests.csproj", "{CD570ADE-705B-4902-8AFB-3C2D9516153E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CallersMustNameAllParameters", "CallersMustNameAllParameters", "{B8F3E4A1-9C2D-4F5E-A7B3-1D6E8F9A0C2B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.CallersMustNameAllParameters.Tests", "CallersMustNameAllParameters\Tests\AN.CodeAnalyzers.CallersMustNameAllParameters.Tests.csproj", "{ADDD6F2F-2FDB-96C0-EB29-5BA3904FFD77}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.CallersMustNameAllParameters.Tests", "src/CallersMustNameAllParameters\Tests\AN.CodeAnalyzers.CallersMustNameAllParameters.Tests.csproj", "{ADDD6F2F-2FDB-96C0-EB29-5BA3904FFD77}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProhibitPlatformImports", "ProhibitPlatformImports", "{09445335-5E6F-6FDB-A854-511FFDEAE711}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{D7B81BC5-C06E-45DD-0191-D1E883125164}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ProhibitPlatformImports.Tests", "ProhibitPlatformImports\Tests\AN.CodeAnalyzers.ProhibitPlatformImports.Tests.csproj", "{832E30FD-328C-495D-B032-18E92F46C8A0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ProhibitPlatformImports.Tests", "src/ProhibitPlatformImports\Tests\AN.CodeAnalyzers.ProhibitPlatformImports.Tests.csproj", "{832E30FD-328C-495D-B032-18E92F46C8A0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProhibitNamespaceAccess", "ProhibitNamespaceAccess", "{48CEDFC8-55D1-6B48-2707-6B5E989608BF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{552592F1-33D7-C340-A893-F0FC4C49B242}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ProhibitNamespaceAccess.Tests", "ProhibitNamespaceAccess\Tests\AN.CodeAnalyzers.ProhibitNamespaceAccess.Tests.csproj", "{5DA27516-51BA-470C-88B2-162B4C68AB4A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.ProhibitNamespaceAccess.Tests", "src/ProhibitNamespaceAccess\Tests\AN.CodeAnalyzers.ProhibitNamespaceAccess.Tests.csproj", "{5DA27516-51BA-470C-88B2-162B4C68AB4A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PureFunction", "PureFunction", "{E8582181-17A9-DCFD-A203-646EE196D7EC}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{8C95D1B2-A485-0DF6-2C30-794AB4D0862E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.PureFunction.Tests", "PureFunction\Tests\AN.CodeAnalyzers.PureFunction.Tests.csproj", "{A037D350-A0B4-4B2D-8A41-AF00C7DCB0AE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AN.CodeAnalyzers.PureFunction.Tests", "src/PureFunction\Tests\AN.CodeAnalyzers.PureFunction.Tests.csproj", "{A037D350-A0B4-4B2D-8A41-AF00C7DCB0AE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="$(MSBuildThisFileDirectory)AN.CodeAnalyzers.shared.Build.props" />
+  <Import Project="$(MSBuildThisFileDirectory)..\AN.CodeAnalyzers.shared.Build.props" />
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsRoslynComponent>true</IsRoslynComponent>
-    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**;CoreTools/**;ClassLibInfo/**;SaferAssemblyLoader/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/Tests/**;StableABIVerification/**;VerifyUserConfigGitignore/**;CoreTools/**;ClassLibInfo/**;SaferAssemblyLoader/**;cmd/**</DefaultItemExcludes>
 
     <!-- Package properties -->
     <PackageId>ArtificialNecessity.CodeAnalyzers</PackageId>
@@ -32,7 +32,7 @@
 
   <ItemGroup>
     <!-- Pack README-nuget.md for NuGet.org package page (stripped-down version without source tree details) -->
-    <None Include="README-nuget.md" Pack="true" PackagePath="\" />
+    <None Include="..\README-nuget.md" Pack="true" PackagePath="\" />
     <!-- Pack the analyzer DLL in the analyzers/dotnet/cs directory -->
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <!-- Pack the .targets file so consuming projects get MSBuild targets automatically -->
@@ -46,15 +46,13 @@
     <!-- Pack the JsonPeek MSBuild task DLL in the tasks/ directory -->
     <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\JsonPeekTask.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" />
     <None Include="CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll" Pack="true" PackagePath="tasks/netstandard2.0" Visible="false" Condition="Exists('CoreTools\bin\$(Configuration)\netstandard2.0\Hjson.dll')" />
-    <!-- Pack the JsonPeek CLI tool (net8.0 framework-dependent exe) in the tools/ directory -->
-    <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.exe" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <!-- Pack the JsonPeek CLI tool (net8.0 framework-dependent, invoked via: dotnet JsonPeek.dll) in the tools/ directory -->
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.deps.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeek.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\JsonPeekTask.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="CoreTools\JsonPeekTool\bin\$(Configuration)\net8.0\Hjson.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
-    <!-- Pack the ClassLibInfo CLI tool (net8.0 framework-dependent exe) in the tools/ directory -->
-    <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.exe" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
+    <!-- Pack the ClassLibInfo CLI tool (net8.0 framework-dependent, invoked via: dotnet ClassLibInfo.dll) in the tools/ directory -->
     <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.dll" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.deps.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />
     <None Include="ClassLibInfo\ClassLibInfoTool\bin\$(Configuration)\net8.0\ClassLibInfo.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any" Visible="false" />

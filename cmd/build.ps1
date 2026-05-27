@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve project root (one level up from cmd/)
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$csprojPath = Join-Path $projectRoot 'AN.CodeAnalyzers.csproj'
+$csprojPath = Join-Path $projectRoot 'src\AN.CodeAnalyzers.csproj'
 
 # Set local NuGet feed path so DeployToLocalNuGet target copies the .nupkg
 $env:LOCAL_NUGET_REPO = 'C:\PROJECTS\LocalNuGet'
