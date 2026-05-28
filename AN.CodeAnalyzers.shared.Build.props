@@ -26,13 +26,20 @@
     <LocalNuGetFeedPath>$(LOCAL_NUGET_REPO)</LocalNuGetFeedPath>
   </PropertyGroup>
 
-  <!-- Deploy .nupkg to local NuGet feed after pack -->
+  <!-- Deploy .nupkg to local NuGet feed after pack.
+       Uses @(NuGetPackOutput) populated by the Pack target — this contains the exact
+       path to the .nupkg file, avoiding NuGet version normalization issues
+       (e.g., 084654 normalized to 84654 in the filename). -->
   <Target Name="DeployToLocalNuGet" AfterTargets="Pack" Condition="'$(LocalNuGetFeedPath)' != ''">
     <MakeDir Directories="$(LocalNuGetFeedPath)" Condition="!Exists('$(LocalNuGetFeedPath)')" />
-    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+    <ItemGroup>
+      <_PackagesToDeploy Include="@(NuGetPackOutput)" Condition="'%(Extension)' == '.nupkg'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PackagesToDeploy)"
           DestinationFolder="$(LocalNuGetFeedPath)"
           OverwriteReadOnlyFiles="true" />
-    <Message Importance="High" Text="$(PackageId): Deployed $(PackageId).$(PackageVersion).nupkg to $(LocalNuGetFeedPath)" />
+    <Message Importance="High" Text="$(PackageId): Deployed %(Filename)%(Extension) to $(LocalNuGetFeedPath)"
+             Condition="'@(_PackagesToDeploy)' != ''" />
   </Target>
 
   <!-- ══════════════════════════════════════════════════════════════════

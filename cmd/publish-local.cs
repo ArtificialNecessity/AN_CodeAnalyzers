@@ -1,4 +1,4 @@
-#!/usr/bin/env dotnet run
+#!/usr/bin/env -S dotnet run
 // publish-local.cs — Build and pack all packages to local NuGet feed
 //
 // Versioning is timestamp-based (v2) — every build gets a unique version
