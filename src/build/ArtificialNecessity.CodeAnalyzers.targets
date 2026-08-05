@@ -122,4 +122,34 @@
     AssemblyFile="$(ANCodeAnalyzersTaskDir)JsonPeekTask.dll"
     TaskFactory="TaskHostFactory" />
 
+  <!-- ══════════════════════════════════════════════════════════════════
+       DumpClassLibInfo — dump API surfaces of all NuGet dependencies
+
+       Explicit target (never runs during a normal build). Invoke with:
+         dotnet build -t:DumpClassLibInfo
+         dotnet build -t:DumpClassLibInfo -p:ClassLibInfoIncludeTransitive=true
+         dotnet build -t:DumpClassLibInfo -p:ClassLibInfoOutputDir=SomeDir
+
+       Runs the packaged ClassLibInfo CLI tool (tools/net8.0/any/ClassLibInfo.dll)
+       in --project mode: it resolves this project's NuGet dependencies via
+       'dotnet list package' and writes {Assembly}-{version}.api.txt files to
+       $(ClassLibInfoOutputDir) (default: _EXTERNAL_APIS\ClassLibInfo).
+       Existing dump files are kept — delete them to regenerate.
+       ══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <ClassLibInfoToolDll Condition="'$(ClassLibInfoToolDll)' == ''">$(MSBuildThisFileDirectory)..\tools\net8.0\any\ClassLibInfo.dll</ClassLibInfoToolDll>
+    <ClassLibInfoOutputDir Condition="'$(ClassLibInfoOutputDir)' == ''">_EXTERNAL_APIS\ClassLibInfo</ClassLibInfoOutputDir>
+    <ClassLibInfoIncludeTransitive Condition="'$(ClassLibInfoIncludeTransitive)' == ''">false</ClassLibInfoIncludeTransitive>
+  </PropertyGroup>
+
+  <Target Name="DumpClassLibInfo">
+    <Error Condition="!Exists('$(ClassLibInfoToolDll)')"
+           Text="ClassLibInfo tool not found at $(ClassLibInfoToolDll) — is the ArtificialNecessity.CodeAnalyzers package restored?" />
+    <PropertyGroup>
+      <_ClassLibInfoTransitiveArg Condition="'$(ClassLibInfoIncludeTransitive)' == 'true'">--include-transitive</_ClassLibInfoTransitiveArg>
+    </PropertyGroup>
+    <Exec Command="dotnet exec &quot;$(ClassLibInfoToolDll)&quot; --project &quot;$(MSBuildProjectFullPath)&quot; --output &quot;$(ClassLibInfoOutputDir)&quot; --format flat $(_ClassLibInfoTransitiveArg)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
 </Project>

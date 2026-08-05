@@ -23,9 +23,10 @@ $localNuGetFeedPath = 'C:\PROJECTS\LocalNuGet'
 
 Write-Host "`n=== Packing AN.CodeAnalyzers release ===" -ForegroundColor Cyan
 $packTimestamp = Get-Date
-dotnet pack $csprojPath -c Release
+# GeneratePackageOnBuild=true: a Release build compiles all task/tool projects and packs
+dotnet build $csprojPath -c Release
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: dotnet pack failed with exit code $LASTEXITCODE" -ForegroundColor Red
+    Write-Host "ERROR: dotnet build failed with exit code $LASTEXITCODE" -ForegroundColor Red
     exit $LASTEXITCODE
 }
 

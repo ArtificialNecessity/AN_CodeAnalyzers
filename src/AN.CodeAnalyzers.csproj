@@ -31,6 +31,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Build-order-only references: ensure task/tool DLLs exist before this project packs them
+         (ReferenceOutputAssembly=false: nothing is referenced or copied; SkipGetTargetFrameworkProperties
+         allows the netstandard2.0 analyzer to depend on net8.0 tool projects) -->
+    <ProjectReference Include="StableABIVerification\StableABIVerification.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" />
+    <ProjectReference Include="VerifyUserConfigGitignore\VerifyUserConfigGitignore.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" />
+    <ProjectReference Include="CoreTools\CoreTools.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" />
+    <ProjectReference Include="CoreTools\JsonPeekTool\AN.CodeAnalyzers.JsonPeek.Tool.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" />
+    <ProjectReference Include="ClassLibInfo\ClassLibInfoTool\AN.CodeAnalyzers.ClassLibInfo.Tool.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Pack README-nuget.md for NuGet.org package page (stripped-down version without source tree details) -->
     <None Include="..\README-nuget.md" Pack="true" PackagePath="\" />
     <!-- Pack the analyzer DLL in the analyzers/dotnet/cs directory -->

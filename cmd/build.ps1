@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve project root (one level up from cmd/)
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$csprojPath = Join-Path $projectRoot 'src\AN.CodeAnalyzers.csproj'
+$solutionPath = Join-Path $projectRoot 'AN_CodeAnalyzers.sln'
 
 # Set local NuGet feed path so DeployToLocalNuGet target copies the .nupkg
 $env:LOCAL_NUGET_REPO = 'C:\PROJECTS\LocalNuGet'
@@ -26,7 +26,7 @@ $buildConfig = if ($Release) { 'Release' } else { 'Debug' }
 
 Write-Host "`n=== Building ($buildConfig) ===" -ForegroundColor Cyan
 Write-Host "Local NuGet feed: $env:LOCAL_NUGET_REPO" -ForegroundColor DarkGray
-dotnet build $csprojPath -c $buildConfig
+dotnet build $solutionPath -c $buildConfig
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: dotnet build failed with exit code $LASTEXITCODE" -ForegroundColor Red
     exit $LASTEXITCODE
