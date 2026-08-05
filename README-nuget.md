@@ -22,7 +22,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 ## Installation
 
 ```xml
-<PackageReference Include="ArtificialNecessity.CodeAnalyzers" Version="0.1.9">
+<PackageReference Include="ArtificialNecessity.CodeAnalyzers" Version="*">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 </PackageReference>

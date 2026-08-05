@@ -34,7 +34,7 @@ This repository produces two independent NuGet packages:
 ## Installation
 
 ```xml
-<PackageReference Include="AN.CodeAnalyzers" Version="0.1.1">
+<PackageReference Include="ArtificialNecessity.CodeAnalyzers" Version="*">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 </PackageReference>
