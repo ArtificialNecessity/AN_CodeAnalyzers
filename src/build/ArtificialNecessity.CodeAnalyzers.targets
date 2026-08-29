@@ -131,7 +131,8 @@
          dotnet build -t:DumpClassLibInfo -p:ClassLibInfoOutputDir=SomeDir
 
        Runs the packaged ClassLibInfo CLI tool (tools/net8.0/any/ClassLibInfo.dll)
-       in --project mode: it resolves this project's NuGet dependencies via
+       in project mode (the "dash-dash project" CLI switch; a literal double-dash
+       is illegal inside an XML comment): it resolves this project's NuGet dependencies via
        'dotnet list package' and writes {Assembly}-{version}.api.txt files to
        $(ClassLibInfoOutputDir) (default: _EXTERNAL_APIS\ClassLibInfo).
        Existing dump files are kept — delete them to regenerate.
