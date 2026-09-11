@@ -8,7 +8,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 
 | Verifier                            | Rule   | Description                                                                                                                                                                                    |
 | ----------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **RequireTypedPointersNotIntPtr**         | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
+| **RequireTypedPointersNotIntPtr**         | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types throw away type checking the compiler can do between distinct native handle/pointer types, enable silent type confusion, and create security vulnerabilities. No exceptions. |
 | **CallersMustNameAllParameters**    | AN0103 | Enforces named arguments at call sites for methods with 2+ parameters. Attribute-driven or everywhere mode. Prevents LLM parameter-order confusion. |
 | **EnforceNamingConventions**  | AN0200 | Enforces configurable naming conventions via regex patterns. Phase 1: event naming (e.g., `On.*`). Configured via JSON-like MSBuild property. |
 | **ExplicitEnums**             | AN0001 | Enum members must have explicit values. Inserting a member silently shifts all subsequent values.                                                                                              |
@@ -32,7 +32,7 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 
 ### AN0100: Require typed pointers, not IntPtr
 
-`IntPtr` is not safe. It erases type information at the exact boundary where it matters most — the compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works. `void*` is the same mistake with a different spelling, and `SafeHandle` is an `IntPtr` with a finalizer — lifetime safety, zero type safety.
+`IntPtr` is not safe. It throws away type checking the compiler can do, at the exact boundary where it matters most — the compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works. `void*` is the same mistake with a different spelling, and `SafeHandle` is an `IntPtr` with a finalizer — lifetime safety, zero type safety. (Why AN0100 and AN0102 exist at all: see "friction, not a sandbox" under AN0102.)
 
 This analyzer flags **any** use of `IntPtr`, `UIntPtr` or `void*` anywhere in user code, and warns on `nint`/`nuint` in P/Invoke declarations (correct for `SIZE_T`/`DWORD_PTR` integers, wrong for handles). There are no exceptions.
 
@@ -62,7 +62,53 @@ unsafe struct HFILE { }                       // HWND* and HFILE* are different 
 | `disallow` | Error — build fails on any IntPtr usage       |
 | `ignore`   | Disabled                                       |
 
-**Recommended:** `disallow` everywhere, *including* the interop project — the idiom contains no `IntPtr` and no `void*`, so the interop project builds clean too. `ignore` is a rollout value for unconverted projects, never a destination. Pair with **AN0102** so BCL wrappers around `IntPtr` (`SafeFileHandle`, `Marshal`, `GCHandle`, `File.OpenHandle`) are rejected as well.
+**Recommended:** `disallow` everywhere, *including* the interop project — the idiom contains no `IntPtr` and no `void*`, so the interop project builds clean too. `ignore` is a rollout value for unconverted projects, never a destination. Pair with **AN0102** (below) so untyped pointers that reach your code *without* being spelled `IntPtr` are rejected as well.
+
+### AN0102: Prohibit reachable untyped native pointers
+
+AN0100 catches the untyped pointers **you spelled**. AN0102 catches the ones **you didn't** — the `IntPtr` that lives one field deeper, inside a BCL type, and moves through your code because someone else's signature carries it:
+
+```csharp
+var h = File.OpenHandle(path, FileMode.Open);   // returns SafeFileHandle  → AN0102 (source)
+RandomAccess.Read(h, buffer, 0);                // takes  SafeFileHandle  → AN0102 (sink)
+new SafeFileHandle((nint)0x1234, ownsHandle: false);  // ctor takes IntPtr → AN0102 (sink) — any integer becomes a "file handle"
+```
+
+No `IntPtr` token appears in any of those lines. AN0100 sees nothing. AN0102 flags all three.
+
+**What counts as an untyped native pointer:** `IntPtr`/`UIntPtr` (not `nint`/`nuint` used as integers), `void*`, any `SafeHandle`/`CriticalHandle` subclass, and any struct whose fields make it one — `struct HWND { IntPtr Value; }` is `IntPtr` in a costume, as are `GCHandle`, `HandleRef`, `RuntimeTypeHandle`.
+
+**What fires:**
+
+- **Sources** — a member that *returns* one: `File.OpenHandle()`, `proc.Handle`, `fs.SafeFileHandle`, `Marshal.AllocHGlobal()`, `NativeMemory.Alloc()`, `h.DangerousGetHandle()`.
+- **Sinks** — a member that *accepts* one as a parameter or setter, regardless of what you pass: `RandomAccess.Read(SafeFileHandle, …)`, `new FileStream(SafeFileHandle, …)`, `new Span<byte>(void*, int)`, `Buffer.MemoryCopy(void*, void*, …)`, `Marshal.ReadInt32(IntPtr, …)`.
+- **Declarations** — naming the type at all: `SafeFileHandle f;`, `var h = File.OpenHandle(…)`, `class Mine : SafeHandle`.
+
+**What does not fire:** managed objects that merely *own* a handle internally — `new FileStream(path, …)`, `File.ReadAllBytes`, `Process.Start()`, `typeof(X)`. Holding a `FileStream` is not holding a pointer; there is nothing in your hands to distort. Only touching its `.SafeFileHandle` fires. Also clean: `Marshal.GetLastWin32Error()` (no pointer in the signature), `MemoryMarshal.CreateSpan(ref *p, n)`, `T*` to any real struct, `delegate* unmanaged<…>`.
+
+**The idiom is the same as AN0100:** empty marker struct, `T*` is the handle. If a BCL API exists only in an untyped shape, declare the P/Invoke yourself with `HFILE*`, or use the managed API that never exposes the handle.
+
+**Configuration** via MSBuild property:
+
+```xml
+<PropertyGroup>
+  <ProhibitReachableUntypedNativePointers>warn</ProhibitReachableUntypedNativePointers>
+</PropertyGroup>
+```
+
+| Value        | Behavior                                      |
+| ------------ | --------------------------------------------- |
+| `warn`     | Warning (default)                              |
+| `disallow` | Error — build fails on any reachable untyped pointer |
+| `ignore`   | Disabled — rollout only, never a destination   |
+
+No allowlist, no per-namespace exemption, no opt-out attribute.
+
+#### Why AN0100 + AN0102 exist — friction, not a sandbox
+
+`IntPtr` throws away type checking the C# compiler is perfectly able to do. Native APIs have many distinct pointer and handle types — `HWND`, `HFILE`, `HPCON` — and they are not interchangeable. `IntPtr` flattens all of them to one type so `SetForegroundWindow(hFile)` compiles. That flattening existed for one reason: **VB.NET has no pointer types**, so the CLR needed a pointer-sized value every language could spell. We don't use VB.NET. C# has `unsafe struct HWND { }` and `HWND*`, and with them the compiler type-checks native handles exactly as it type-checks everything else. Every `IntPtr` in a C# codebase is a place where you told the compiler to stop checking.
+
+These analyzers are **not** a sandbox. Compiled C# can always crash the machine — `unsafe`, a wrong `[DllImport]` signature, reflection — and the programmer is in charge of the code. The goal is to **raise the friction on paths that lead to dangerous bugs and exploitable surfaces later**, so that the easy path and the safe path are the same path. This matters most when **an AI is writing the code**: an AI reaches for whatever compiles, and `File.OpenHandle` → `RandomAccess.Read` compiles. With AN0102 it does not — and the error shows the idiom, so the next attempt is the right one.
 
 ### AN0103: Callers must name all parameters
 

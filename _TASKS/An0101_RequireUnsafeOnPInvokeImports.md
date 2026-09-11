@@ -133,5 +133,5 @@ console.Close();  // safe call, no unsafe context needed
 ## Related
 
 - **AN0100: RequireTypedPointersNotIntPtr** — companion rule that eliminates `IntPtr` and `void*` from P/Invoke signatures
-- **AN0102: ProhibitErasedHandlesAndPointers** — rejects BCL types that *wrap* an `IntPtr` (`SafeHandle` family, `Marshal`, `GCHandle`) and any API whose signature carries one
+- **AN0102: ProhibitReachableUntypedNativePointers** — rejects untyped native pointers that reach our code without us spelling them: `SafeHandle` family, costume structs, and any API whose signature returns or accepts one (`File.OpenHandle`, `RandomAccess.*`, `Marshal.*`, `GCHandle`)
 - See [docs/TypeSafePInvoke.md](https://github.com/ArtificialNecessity/AN_CodeAnalyzers/blob/main/docs/TypeSafePInvoke.md) for the full type-safe P/Invoke pattern

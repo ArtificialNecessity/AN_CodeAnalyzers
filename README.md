@@ -18,7 +18,7 @@ This repository produces two independent NuGet packages:
 
 | Verifier                        | Rule   | Description                                                                                                                                                                         |
 | ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types erase type information, enable silent type confusion, and create security vulnerabilities. No exceptions. |
+| **RequireTypedPointersNotIntPtr** | AN0100 | Flags any use of `IntPtr`/`UIntPtr` everywhere and `nint`/`nuint` in P/Invoke declarations. These types throw away type checking the compiler can do between distinct native handle/pointer types, enable silent type confusion, and create security vulnerabilities. No exceptions. |
 | **CallersMustNameAllParameters** | AN0103 | Enforces named arguments at call sites for methods with 2+ parameters. Attribute-driven or everywhere mode. Prevents LLM parameter-order confusion. |
 | **ProhibitPlatformImports** | AN0104 | Flags `[DllImport]`, `[LibraryImport]`, `[UnmanagedCallersOnly]`, and `NativeLibrary.Load/TryLoad` calls. Project-level policy to prohibit all platform imports. |
 | **ProhibitNamespaceAccess** | AN0105 | Prohibit access to specific namespaces. Flags type references (including `var` inference) from prohibited namespaces. Supports prefix globbing with `*`. Per-pattern error/warn severity. |
@@ -116,7 +116,7 @@ AN_CodeAnalyzers/
 
 ### AN0100: Require typed pointers, not IntPtr
 
-`IntPtr` is not safe. It erases type information at the exact boundary where it matters most. The compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works.
+`IntPtr` is not safe. It throws away type checking the C# compiler can do, at the exact boundary where it matters most. (`IntPtr` exists because VB.NET has no pointer types; we do not use VB.NET.) The compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works.
 
 This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, and `nint`/`nuint` in P/Invoke declarations. There are no exceptions. Use typed structs for handles and `unsafe T*` for pointers.
 

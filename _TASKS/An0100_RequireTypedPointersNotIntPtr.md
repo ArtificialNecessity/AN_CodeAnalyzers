@@ -11,9 +11,13 @@
 
 **`IntPtr` is not safe.** It is not a pointer. It is not a handle. It is not a size. It is an untyped bag of bits that the compiler cannot reason about, that the type checker cannot protect, and that silently converts between completely unrelated concepts. Every `IntPtr` in your code is a bug waiting to happen.
 
-`IntPtr` erases type information at the exact boundary where type information matters most. The compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer from an integer someone cast for convenience. You can assign a window handle to a console handle. You can increment a handle as if it were a pointer. You can pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works. Some of it corrupts memory. Some of it creates security vulnerabilities. All of it is preventable.
+**`IntPtr` throws away type checking the C# compiler is perfectly able to do.** Native APIs have many distinct pointer and handle types — `HWND`, `HPCON`, `HFILE`, `PROC_THREAD_ATTRIBUTE_LIST*` — and they are not interchangeable. `IntPtr` flattens all of them to one type at the exact boundary where the distinction matters most. The compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer from an integer someone cast for convenience. You can assign a window handle to a console handle. You can increment a handle as if it were a pointer. You can pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works. Some of it corrupts memory. Some of it creates security vulnerabilities. All of it is preventable.
 
-This analyzer exists because `IntPtr` has no place in user code. There are no exceptions.
+`IntPtr` exists for one historical reason: **VB.NET has no pointer types**, so the CLR needed a pointer-sized value type that every language could spell. We do not use VB.NET. C# has `unsafe struct HWND { }` and `HWND*`, and with them the compiler type-checks native handles exactly as it type-checks everything else. Every `IntPtr` in a C# codebase is a place where we told the compiler to stop checking. We want the compiler checking.
+
+This analyzer exists because `IntPtr` has no place in C# code. There are no exceptions.
+
+**What this is not.** Compiled C# can always crash the machine — `unsafe`, a wrong `[DllImport]` signature, reflection. The programmer is in charge and can route around any analyzer. The goal is not to make that impossible; it is to **raise the friction on paths that lead to dangerous bugs and exploitable surfaces later**, so the easy path and the safe path are the same path. This matters most when an AI is writing the code: an AI reaches for whatever compiles, and with AN0100/AN0102 in place, the untyped version does not — and the error message shows the idiom, so the next attempt is the right one.
 
 ---
 
@@ -81,7 +85,7 @@ MSBuild property: `<RequireTypedPointersNotIntPtr>`
 For `IntPtr`/`UIntPtr` (anywhere):
 
 ```
-AN0100: Do not use 'IntPtr' — it erases the type at the exact boundary where the type matters.
+AN0100: Do not use 'IntPtr' — it throws away the type at the exact boundary where the type matters.
         Handles are EMPTY unsafe marker structs and the pointer IS the handle:
             unsafe struct HWND { }        HWND* hWnd;        (HWND*)null        HWND** phWnd (out-param)
         Pointers name their pointee:  byte* buffer;  OVERLAPPED* ov;   Sizes/bitfields are integers:  nuint cbSize;
@@ -109,7 +113,7 @@ AN0100: 'nuint attribute' in P/Invoke: is this an INTEGER (SIZE_T / DWORD_PTR / 
 
 ## Why IntPtr Is Not Safe
 
-### It erases type information
+### It throws away type checking the compiler can do
 
 ```csharp
 // All three are IntPtr. The compiler sees no difference.
@@ -178,7 +182,7 @@ There is **no interop project where `IntPtr` is the job.** The interop project's
 ### For pointer parameters: `unsafe T*` — every pointer names its pointee
 
 ```csharp
-// BAD — IntPtr erases what we're pointing at. This is the signature that caused the ConPTY bug below.
+// BAD — IntPtr hides what we're pointing at. This is the signature that caused the ConPTY bug below.
 [DllImport("kernel32.dll")]
 static extern bool UpdateProcThreadAttribute(
     IntPtr lpAttributeList, uint dwFlags, IntPtr attribute,
@@ -236,6 +240,6 @@ Every project, including the interop project, is `<RequireTypedPointersNotIntPtr
 
 1. **Interop project** — small, dedicated, `unsafe`: defines the empty marker structs and the `T*` P/Invoke signatures (AN0101 requires the `unsafe` marker on them). It builds clean under `disallow` because the idiom contains no `IntPtr` and no `void*`. It exposes a **safe public API** (methods without `unsafe` in their signatures) so consumers never see a pointer.
 
-2. **All other projects** — consume the interop project's safe API. They contain no P/Invoke, no pointers, no handles of any kind, and are additionally under AN0102 (`ProhibitErasedHandlesAndPointers`) so that BCL types which *wrap* an `IntPtr` (`SafeHandle` family, `Marshal`, `GCHandle`, `File.OpenHandle`) are rejected too.
+2. **All other projects** — consume the interop project's safe API. They contain no P/Invoke, no pointers, no handles of any kind, and are additionally under AN0102 (`ProhibitReachableUntypedNativePointers`) so that untyped native pointers that *reach* our code without being spelled (`SafeHandle` family, costume structs, `File.OpenHandle`, `RandomAccess.*`, `Marshal.*`, `GCHandle`) are rejected too.
 
 `ignore` exists only as a **rollout** value for a project that has not been converted yet. It is never a destination.

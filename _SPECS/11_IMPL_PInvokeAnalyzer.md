@@ -16,7 +16,7 @@ P/Invoke bugs are among the hardest to diagnose because:
 
 4. **AI confidently generates wrong signatures.** An AI will produce a P/Invoke binding that looks plausible but has never been verified against the actual native header. It has no way to know `EGLNativeDisplayType` is a pointer, not an int.
 
-5. **IntPtr erases all type information.** Every native pointer type — `EGLDisplay`, `HWND`, `GLXContext`, `Display*` — collapses to `IntPtr`. You can pass an `EGLDisplay` where an `EGLSurface` is expected and the compiler won't blink. The type safety that exists in the native API is thrown away at the managed boundary.
+5. **IntPtr throws away type checking the compiler can do.** Every native pointer type — `EGLDisplay`, `HWND`, `GLXContext`, `Display*` — collapses to `IntPtr`. You can pass an `EGLDisplay` where an `EGLSurface` is expected and the compiler won't blink. The type safety that exists in the native API is thrown away at the managed boundary.
 
 ## The Solution
 
@@ -86,7 +86,7 @@ Bare `IntPtr` / `nint` is forbidden in P/Invoke signatures. Every native pointer
 
 - ID: `AN0014`
 - Severity: Error
-- Message: `P/Invoke method '{0}' uses IntPtr for parameter '{1}'. IntPtr erases native type safety. Declare a typed pointer struct and use a pointer instead: 'unsafe struct {NativeTypeName} {{}} ... {NativeTypeName}* {1}'`
+- Message: `P/Invoke method '{0}' uses IntPtr for parameter '{1}'. IntPtr is an untyped native pointer; the compiler cannot type-check it. Declare a typed pointer struct and use a pointer instead: 'unsafe struct {NativeTypeName} {{}} ... {NativeTypeName}* {1}'`
 
 **Scope:** Controlled by MSBuild property.
 
@@ -102,7 +102,7 @@ When `true`, AN0014 fires on any `IntPtr` or `nint` in a `[DllImport]` / `[Libra
 
 Instead of:
 ```csharp
-// WRONG — IntPtr erases all type safety
+// WRONG — IntPtr: the compiler cannot tell EGLDisplay from EGLSurface
 [DllImport("libEGL.so")]
 static extern IntPtr eglGetDisplay(IntPtr displayId);
 // Can accidentally pass an EGLSurface where EGLDisplay is expected. No error.
@@ -127,7 +127,7 @@ static extern unsafe EGLDisplay* eglGetDisplay(EGLNativeDisplayType* displayId);
 - The empty struct compiles to nothing — zero runtime cost, pure compile-time safety.
 - The `unsafe` requirement is appropriate because you're doing pointer interop — it should look dangerous.
 
-**Why no opt-out:** The whole point of this rule is that IntPtr is the bug. Every use of IntPtr in a P/Invoke is an erased type. `void*` in native maps to `void*` in managed — that's still not IntPtr. Callback user-data `void*` is `void*`. There is no legitimate reason to use IntPtr in a P/Invoke signature when typed pointer structs exist.
+**Why no opt-out:** The whole point of this rule is that IntPtr is the bug. Every use of IntPtr in a P/Invoke is an untyped native pointer the compiler cannot check. `void*` in native maps to `void*` in managed — that's still not IntPtr. Callback user-data `void*` is `void*`. There is no legitimate reason to use IntPtr in a P/Invoke signature when typed pointer structs exist.
 
 ## PInvoke Snapshot File
 

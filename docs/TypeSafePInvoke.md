@@ -1,6 +1,8 @@
-Replacing IntPtr with unsafe struct pointers.
+# Replacing IntPtr with unsafe struct pointers.
 
-# Introduction 
+by David W. Jeske - circa 2003
+
+## Introduction 
 
 When using .NET Platform Invoke tools to call native C functions in DLLs, it's common for paramaters to contain pointers to structures, classes, or strings. Sometimes it's practical to marshall the data into a managed representation, such as when marshalling a C char* string into a .NET String class.
 
@@ -10,9 +12,9 @@ The .NET CTS provides a value type called IntPtr, which can be used to store opa
 
 A safer alternative to IntPtr is the unsafe struct *. Just like IntPtr, unsafe-struct-pointers are a value type used to store opaque pointer data that won't be accessed from managed code.  However, because the structs themselves have types, the compiler can typecheck and assure the proper pointer type is supplied to the proper native entry point.   
 
-Note: Another alternative to IntPtr is the SafeHandle pattern introduced in .NET v2.0 "Whidbey". While this article will focus on the raw use of unsafe struct pointers, we'll also compare this approach to SafeHandle. 
+Note: The SafeHandle pattern introduced in .NET v2.0 "Whidbey" is often suggested as the fix for IntPtr. It is not — it addresses handle *lifetime*, not handle *type*, and a `SafeFileHandle` can be constructed from any integer. See "Why SafeHandle Doesn't Solve This" at the end of this article. 
 
-# Pointer Marshalling  
+## Pointer Marshalling  
 
 Let's begin by looking at a basic pointer marshalling situation. We will use the .NET wrapper around the Clearsilver HTML templating library as an example. Two functions in the C Clearsilver DLL are:  
 
@@ -106,7 +108,7 @@ Below we've expanded the example to include a constructor and a "safe" setValue(
 
 Take special note of the use of the internal [Access Modifier](http://msdn.microsoft.com/en-us/library/ms173121.aspx) on the private unsafe instance pointer HDF *hdf_root.  This assures that only our managed wrapper assembly has permission to access this pointer.  Also take note that we're not yet addressing memory lifetime issues, which we'll briefly cover in the next section.  
 
-# Memory Lifetime 
+## Memory Lifetime 
 
 The main intent of this article is to cover how to replace use of the generic undifferentiated IntPtr with more specifically typed unsafe struct pointers. However, we're going to briefly look at some of the issues related to memory lifetime for these pointers.  
 
@@ -161,10 +163,34 @@ To see the details of the NeoErr class, the full Hdf and Cs wrappers,  or more e
 
 The above unsafe struct pointer usage is valid according to the Common Type System spec, and works in Microsoft.NET. However, several versions of the Mono .NET runtime marshalling code did not properly handle unsafe struct pointers in PInvoke entry points.  Therefore, you'll need to be using the very latest Mono 2.12 (or very very old versions of Mono) for this to work.  
 
-Another model for marshalling pointers without the type danger of IntPtr is to use SafeHandle. Like unsafe struct pointers, SafeHandles replace IntPtr in [DllImport] entrypoints, allowing strongly typed native pointer handling. unsafe struct provides a familiar coding idiom for C/C++ programmers, allowing the use of try/finally, finalizers, and situations such as the double-indirect pointers required in the above hdf_init(HDF **hdf) call. SafeHandle, on the other hand, provides a solution to a tricky [GC finalizer race condition](http://blogs.msdn.com/b/bclteam/archive/2005/03/16/396900.aspx) which Platform Invoke code can fall victim to.   
+# Why SafeHandle Doesn't Solve This
+
+.NET 2.0 "Whidbey" introduced `SafeHandle`, and it is often offered as the answer to IntPtr. It is not. It solves a different problem.
+
+`SafeHandle` is `protected IntPtr handle` plus a reference count and a critical finalizer. What it buys you is **lifetime** safety: the handle is released exactly once, even if a thread is aborted mid-call, and it closes a tricky [GC finalizer race condition](http://blogs.msdn.com/b/bclteam/archive/2005/03/16/396900.aspx) that Platform Invoke code can fall victim to. Those are real benefits.
+
+What it does **not** buy you is **type** safety, which is the subject of this article. `SafeFileHandle` and `SafeWaitHandle` are different class names, but the *type does not constrain the value*:
+
+```C#
+// Compiles. Wraps a window handle number in a "file handle" and will CloseHandle() it on finalize.
+var notAFile = new SafeFileHandle(hwnd.DangerousGetHandle(), ownsHandle: true);
+
+// Compiles. Any integer at all becomes a "file handle" the kernel will happily ReadFile() on.
+var fromThinAir = new SafeFileHandle((nint)0x1234, ownsHandle: false);
+RandomAccess.Read(fromThinAir, buffer, 0);
+```
+
+Every `SafeHandle` has a public constructor taking `IntPtr`, a `SetHandle(IntPtr)`, and a `DangerousGetHandle()` returning `IntPtr`. The untyped value goes in and comes out freely; the class name is a label, not a check. Contrast the unsafe struct pointer: there is no way to manufacture an `HDF*` from an `NEOERR*` or from an integer without an explicit cast that is visible in the source, and `hdf_set_value(neoerr, …)` does not compile.
+
+The two mechanisms are also not complementary in practice. The moment a `SafeHandle` is consumed — by a `[DllImport]` that takes it, by `DangerousGetHandle()`, by any BCL method such as `RandomAccess.Read` — the value is an `IntPtr` again and all typing is gone. You cannot put an `HDF*` inside a `SafeHandle` and keep the type; the base class stores `IntPtr`.
+
+Lifetime, meanwhile, is straightforward with typed pointers: the `Hdf` class above already handles it with a finalizer and could add `IDisposable` for deterministic release. That is ordinary C# and it keeps the `HDF*` type all the way down.
+
+So: `IntPtr`, `void*`, and `SafeHandle` are three spellings of the same untyped native pointer. The unsafe struct pointer is the only one of the four options where the C# compiler type-checks native handles the way it type-checks everything else.
 
 # History  
 
+* 2026 September - Preface with the current idiom; "Why SafeHandle Doesn't Solve This" replaces the earlier paragraph that presented SafeHandle as an alternative. Article otherwise unchanged. This article is the origin of the idiom enforced by the AN0100/AN0101/AN0102 analyzers.
 * 2012 August - Initial release  
 
 # License

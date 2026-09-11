@@ -20,7 +20,7 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
         private static readonly DiagnosticDescriptor intPtrRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use raw IntPtr/UIntPtr",
-            "Do not use '{0}'. IntPtr and UIntPtr erase type information and are not safe. Use typed structs for handles and unsafe T* for pointers.",
+            "Do not use '{0}'. IntPtr and UIntPtr are untyped native pointers: the compiler cannot tell an HWND from an HFILE from a heap address. Use typed structs for handles and unsafe T* for pointers.",
             category,
             DiagnosticSeverity.Warning, // default severity; overridden by config
             isEnabledByDefault: true,
