@@ -43,10 +43,18 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
 
         // Every message in the AN0100/AN0102 family ends with the same idiom block so it is impossible
         // to read the error and not know what to type instead.
+        // LINE 1 IS SELF-CONTAINED: MSBuild's console logger prints only the first line of a multi-line
+        // diagnostic (IDEs show all of it). An AI or a human reading `dotnet build` output must still see
+        // the idiom, so the first line carries finding + compact idiom + "Never…" + link; the lines after
+        // it are the expanded form. These are string.Format templates: literal braces are doubled.
+        private const string never = "Never IntPtr, never void*, never SafeHandle.";
         private const string neverLine = "\n        Never IntPtr, never void*, never SafeHandle.";
         private const string seeLine = "\n        See: " + helpLinkUrl;
 
         // {M} is the suggested marker struct name (HFILE, HWND, HANDLE_NAME), always the LAST argument.
+        private const string compactHandle = " Write a typed opaque pointer:  unsafe struct {M} {{ }}  {M}* h;  ({M}*)null.  " + never + "  See: " + helpLinkUrl;
+        private const string compactPointer = " Name the pointee (byte*, OVERLAPPED*, HPCON**); span from T*: MemoryMarshal.CreateSpan(ref *p, n).  " + never + "  See: " + helpLinkUrl;
+
         private const string idiomHandle =
             "\n        Handles are typed opaque pointers — an empty marker struct, and the pointer IS the handle:" +
             "\n            public unsafe struct {M} {{ }}     {M}* h;     ({M}*)null for \"no handle\"";
@@ -61,7 +69,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
         private static readonly DiagnosticDescriptor sourceHandleRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Untyped native handle reaches this code",
-            "'{0}' returns '{1}', an untyped native handle (IntPtr with a class name on it)." +
+            "'{0}' returns '{1}', an untyped native handle (IntPtr with a class name on it)." + compactHandle.Replace("{M}", "{2}") +
             idiomHandle.Replace("{M}", "{2}") +
             neverLine + " Or use a managed API that does not expose the handle (FileStream)." + seeLine,
             category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: helpLinkUrl);
@@ -70,7 +78,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
         private static readonly DiagnosticDescriptor sourcePointerRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Untyped native pointer reaches this code",
-            "'{0}' returns '{1}', an untyped native pointer." + idiomPointer + neverLine + seeLine,
+            "'{0}' returns '{1}', an untyped native pointer." + compactPointer + idiomPointer + neverLine + seeLine,
             category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: helpLinkUrl);
 
         // ---- SINK: a member accepts an untyped native pointer (parameter or setter) ----
@@ -78,7 +86,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
         private static readonly DiagnosticDescriptor sinkHandleRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Untyped native handle handed to native code",
-            "'{0}' takes '{1}' ({2}), an untyped native handle — any integer can be wrapped and handed here." +
+            "'{0}' takes '{1}' ({2}), an untyped native handle \u2014 any integer can be wrapped and handed here." + compactHandle.Replace("{M}", "{3}") +
             idiomHandle.Replace("{M}", "{3}") +
             neverLine + " Or use a managed API that does not expose the handle (FileStream)." + seeLine,
             category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: helpLinkUrl);
@@ -87,7 +95,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
         private static readonly DiagnosticDescriptor sinkPointerRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Untyped native pointer handed to native code",
-            "'{0}' takes '{1}' ({2}), an untyped native pointer." + idiomPointer + neverLine + seeLine,
+            "'{0}' takes '{1}' ({2}), an untyped native pointer." + compactPointer + idiomPointer + neverLine + seeLine,
             category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: helpLinkUrl);
 
         // ---- TYPE: our code names or infers an untyped native pointer type ----
@@ -95,7 +103,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
         private static readonly DiagnosticDescriptor typeRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Untyped native pointer type",
-            "'{0}' is an untyped native pointer type: {1}." +
+            "'{0}' is an untyped native pointer type: {1}." + compactHandle.Replace("{M}", "{2}") +
             idiomHandle.Replace("{M}", "{2}") + neverLine + seeLine,
             category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: helpLinkUrl);
 
@@ -257,7 +265,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
                 return;
 
             reportDiagnostic(operationContext.ReportDiagnostic, typeRule, syntax.GetLocation(), effectiveSeverity,
-                member.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), receiverInfo.Reason, receiverInfo.SuggestedMarker);
+                UntypedTypeClassifier.display(member.ContainingType), receiverInfo.Reason, receiverInfo.SuggestedMarker);
         }
 
         private static void reportSource(
@@ -284,7 +292,7 @@ namespace AN.CodeAnalyzers.ProhibitReachableUntypedNativePointers
 
         private static string displayMember(ISymbol member)
         {
-            var containing = member.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+            var containing = member.ContainingType == null ? null : UntypedTypeClassifier.display(member.ContainingType);
             var name = member is IMethodSymbol { MethodKind: MethodKind.Constructor } ? "new" : member.Name;
             return containing == null ? name : containing + "." + name;
         }

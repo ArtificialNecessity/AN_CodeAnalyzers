@@ -531,5 +531,21 @@ public unsafe class NativeMethods
             Assert.Contains("Name the pointee", voidMessage);
             Assert.Contains("Never IntPtr, never void*, never SafeHandle", voidMessage);
         }
+
+        [Fact]
+        public void Messages_RenderWithoutFormatErrors()
+        {
+            // Regression: the idiom text contains literal braces ("unsafe struct HWND { }"). In a string.Format
+            // template they must be doubled, or the rendered message falls back to the raw template ("Do not use '{0}'").
+            // Caught by the AN_Mirica consumer proof, not by location-only tests.
+            var descriptors = new AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.RequireTypedPointersNotIntPtrAnalyzer().SupportedDiagnostics;
+            foreach (var descriptor in descriptors)
+            {
+                var rendered = string.Format(descriptor.MessageFormat.ToString(), "IntPtr");
+                Assert.DoesNotContain("{0}", rendered);
+                Assert.Contains("IntPtr", rendered);
+                Assert.Contains("{ }", rendered);   // the empty struct body survived un-doubling
+            }
+        }
     }
 }

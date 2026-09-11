@@ -242,6 +242,7 @@ Message construction rules:
 3. "Never IntPtr, never void*, never SafeHandle." appears in every AN0102 message — the three spellings of the same mistake, named together so nobody swaps one for another.
 4. Last line: the docs link. `docs/TypeSafePInvoke.md` must be rewritten to match (see Deliverables).
 5. Messages say **untyped native pointer** / **untyped native handle**. No other synonym.
+6. **Line 1 is self-contained.** Implementation finding (2026-09-11, consumer proof): MSBuild's console logger prints only the *first* line of a multi-line diagnostic; the continuation lines reach IDEs and the Error List but not `dotnet build` output — i.e. not an AI reading the build. So line 1 carries finding + compact idiom (`unsafe struct HFILE { }  HFILE* h;  (HFILE*)null`) + "Never IntPtr, never void*, never SafeHandle." + the docs link; the expanded block follows for IDEs. Also: message formats are `string.Format` templates — the `{ }` in the idiom must be written `{{ }}` or the rendered message degrades to the raw template (`Do not use '{0}'`). Both analyzers have a rendered-message regression test for this.
 
 ---
 

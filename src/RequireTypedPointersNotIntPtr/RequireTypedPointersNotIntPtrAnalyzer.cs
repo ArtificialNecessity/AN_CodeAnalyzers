@@ -18,9 +18,14 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
 
         // Every message in the AN0100/AN0102 family ends with the same idiom block so it is
         // impossible to read the error and not know what to type instead.
+        // NOTE: these are string.Format templates — literal braces must be doubled ({{ }}).
+        // LINE 1 IS SELF-CONTAINED: MSBuild's console logger prints only the first line of a multi-line
+        // diagnostic (IDEs show all of it). An AI or a human reading `dotnet build` output must still see
+        // the idiom, so the first line carries finding + compact idiom + "Never…" + link; the lines
+        // after it are the expanded form.
         private const string idiomHandles =
             "\n        Handles are EMPTY unsafe marker structs and the pointer IS the handle:" +
-            "\n            unsafe struct HWND { }        HWND* hWnd;        (HWND*)null        HWND** phWnd (out-param)" +
+            "\n            unsafe struct HWND {{ }}        HWND* hWnd;        (HWND*)null        HWND** phWnd (out-param)" +
             "\n        Pointers name their pointee:  byte* buffer;  OVERLAPPED* ov;   Sizes/bitfields are integers:  nuint cbSize;" +
             "\n        Never IntPtr, never void*, never SafeHandle.   See: " + helpLinkUrl;
 
@@ -28,7 +33,9 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
         private static readonly DiagnosticDescriptor intPtrRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use raw IntPtr/UIntPtr",
-            "Do not use '{0}' \u2014 it throws away the type at the exact boundary where the type matters: the compiler cannot tell an HWND from an HFILE from a heap address." + idiomHandles,
+            "Do not use '{0}' \u2014 an untyped native pointer; the compiler cannot tell an HWND from an HFILE from a heap address. " +
+            "Write a typed opaque pointer:  unsafe struct HWND {{ }}  HWND* hWnd;  (HWND*)null.  Never IntPtr, never void*, never SafeHandle.  See: " + helpLinkUrl +
+            idiomHandles,
             category,
             DiagnosticSeverity.Warning, // default severity; overridden by config
             isEnabledByDefault: true,
@@ -38,8 +45,9 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
         private static readonly DiagnosticDescriptor voidPointerRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use void*",
-            "Do not use '{0}' \u2014 it is IntPtr with a different spelling: \"points at something\" and refuses to say what." +
-            "\n        Name the pointee:  byte* buffer;  OVERLAPPED* ov;  HPCON** phPC;   Reserved-must-be-NULL:  unsafe struct RESERVED_MUST_BE_NULL { }  \u2192  RESERVED_MUST_BE_NULL* p" +
+            "Do not use '{0}' \u2014 IntPtr with a different spelling: \"points at something\" and refuses to say what. " +
+            "Name the pointee:  byte* buffer;  OVERLAPPED* ov;  HPCON** phPC.  Never IntPtr, never void*, never SafeHandle.  See: " + helpLinkUrl +
+            "\n        Name the pointee:  byte* buffer;  OVERLAPPED* ov;  HPCON** phPC;   Reserved-must-be-NULL:  unsafe struct RESERVED_MUST_BE_NULL {{ }}  \u2192  RESERVED_MUST_BE_NULL* p" +
             "\n        Never IntPtr, never void*, never SafeHandle.   See: " + helpLinkUrl,
             category,
             DiagnosticSeverity.Warning,
@@ -50,8 +58,7 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
         private static readonly DiagnosticDescriptor nintInPInvokeRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use nint/nuint in P/Invoke declarations",
-            "'{0}' in P/Invoke: is this an INTEGER (SIZE_T / DWORD_PTR / flags \u2192 {0} is correct, leave it) or a HANDLE/POINTER the native side dereferences or closes (\u2192 write T*: unsafe struct HPCON { }  HPCON* h)?" +
-            "\n        See: " + helpLinkUrl,
+            "'{0}' in P/Invoke: is this an INTEGER (SIZE_T / DWORD_PTR / flags \u2192 {0} is correct, leave it) or a HANDLE/POINTER the native side dereferences or closes (\u2192 write T*: unsafe struct HPCON {{ }}  HPCON* h)?  See: " + helpLinkUrl,
             category,
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
