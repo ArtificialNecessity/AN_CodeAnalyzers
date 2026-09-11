@@ -390,5 +390,146 @@ public class MyClass
                 testSource, enforcementLevel: "warn");
             await analyzerTest.RunAsync();
         }
+
+        // ──────────────────────────────────────────────
+        // void* — IntPtr with a different spelling (matrix rows 10, 11, 30)
+        // ──────────────────────────────────────────────
+
+        [Fact]
+        public async Task VoidPointer_Local_Flagged()
+        {
+            const string testSource = @"
+public unsafe class MyClass
+{
+    public void DoWork()
+    {
+        {|#0:void*|} p = null;
+    }
+}";
+            var analyzerTest = RequireTypedPointersNotIntPtrVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    RequireTypedPointersNotIntPtrVerifierHelper.ExpectIntPtrWarning(0, "void*"),
+                },
+                enforcementLevel: "warn");
+
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task VoidPointer_InDllImport_Flagged()
+        {
+            const string testSource = @"
+using System.Runtime.InteropServices;
+
+public unsafe class NativeMethods
+{
+    [DllImport(""kernel32.dll"")]
+    public static extern void F({|#0:void*|} p);
+}";
+            var analyzerTest = RequireTypedPointersNotIntPtrVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    RequireTypedPointersNotIntPtrVerifierHelper.ExpectIntPtrWarning(0, "void*"),
+                },
+                enforcementLevel: "warn");
+
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task VoidPointerToPointer_FlaggedOnce()
+        {
+            // void** must produce exactly one diagnostic, on the inner void*.
+            const string testSource = @"
+public unsafe class MyClass
+{
+    {|#0:void*|}* _pp;
+}";
+            var analyzerTest = RequireTypedPointersNotIntPtrVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    RequireTypedPointersNotIntPtrVerifierHelper.ExpectIntPtrWarning(0, "void*"),
+                },
+                enforcementLevel: "warn");
+
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task VoidPointer_DisallowMode_ProducesError()
+        {
+            const string testSource = @"
+public unsafe class MyClass
+{
+    {|#0:void*|} _p;
+}";
+            var analyzerTest = RequireTypedPointersNotIntPtrVerifierHelper.CreateDiagnosticsTest(
+                testSource,
+                new[]
+                {
+                    RequireTypedPointersNotIntPtrVerifierHelper.ExpectIntPtrError(0, "void*"),
+                },
+                enforcementLevel: "disallow");
+
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task TypedPointers_TheIdiom_NotFlagged()
+        {
+            // Matrix rows 13 and 14: empty marker structs + T* / T** / (T*)null / (T*)(-1) are the idiom.
+            const string testSource = @"
+using System.Runtime.InteropServices;
+
+public unsafe struct HWND  { }
+public unsafe struct HFILE { }
+public unsafe struct HPCON { }
+public struct OVERLAPPED { public uint Internal; }
+
+public unsafe class NativeMethods
+{
+    [DllImport(""user32.dll"")]
+    public static extern bool SetForegroundWindow(HWND* hWnd);
+
+    [DllImport(""kernel32.dll"")]
+    public static extern bool ReadFile(HFILE* hFile, byte* buffer, uint bytesToRead, uint* bytesRead, OVERLAPPED* overlapped);
+
+    [DllImport(""kernel32.dll"")]
+    public static extern int CreatePseudoConsole(uint size, HFILE* hInput, HFILE* hOutput, uint flags, HPCON** phPC);
+
+    public static void Use()
+    {
+        HWND* nullHandle = (HWND*)null;
+        HFILE* invalid = (HFILE*)(-1);
+        SetForegroundWindow(nullHandle);
+    }
+}";
+            var analyzerTest = RequireTypedPointersNotIntPtrVerifierHelper.CreateNoDiagnosticsTest(
+                testSource, enforcementLevel: "disallow");
+            await analyzerTest.RunAsync();
+        }
+
+        [Fact]
+        public async Task Messages_ShowTheIdiom()
+        {
+            // Matrix row 30 (and the AN0100 half of row 29): every message names the replacement.
+            var descriptors = new AN.CodeAnalyzers.RequireTypedPointersNotIntPtr.RequireTypedPointersNotIntPtrAnalyzer().SupportedDiagnostics;
+            foreach (var descriptor in descriptors)
+            {
+                var messageFormat = descriptor.MessageFormat.ToString();
+                Assert.Contains("TypeSafePInvoke.md", messageFormat);
+                Assert.DoesNotContain("erase", messageFormat);
+            }
+            var intPtrMessage = descriptors[0].MessageFormat.ToString();
+            Assert.Contains("unsafe struct", intPtrMessage);
+            Assert.Contains("Never IntPtr, never void*, never SafeHandle", intPtrMessage);
+            var voidMessage = descriptors[1].MessageFormat.ToString();
+            Assert.Contains("Name the pointee", voidMessage);
+            Assert.Contains("Never IntPtr, never void*, never SafeHandle", voidMessage);
+        }
     }
 }

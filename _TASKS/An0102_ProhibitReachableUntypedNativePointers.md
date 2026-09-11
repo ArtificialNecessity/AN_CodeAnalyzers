@@ -104,7 +104,7 @@ There is no project where `IntPtr` is the job. The interop project's job is *emp
 
 `An0100_RequireTypedPointersNotIntPtr.md` was corrected 2026-09-10/11 and already states this (empty-marker idiom, `RESERVED_MUST_BE_NULL*`, no `ignore` step, `void*` banned, VB.NET rationale). Verify on re-read; nothing further is expected there.
 
-In `An0101_RequireUnsafeOnPInvokeImports.md`, the "CRITICAL TO HELP USERS UNDERSTAND" example passes `SafeFileHandle hInput, SafeFileHandle hOutput` and `out HPCON phPC` with `_handle.IsValid`. Correct it to `HFILE* hInput, HFILE* hOutput, HPCON** phPC`, `private HPCON* _handle;`, `if (_handle != null)`. This example is the one people copy; it must be right.
+`An0101_RequireUnsafeOnPInvokeImports.md` — the "CRITICAL TO HELP USERS UNDERSTAND" example was corrected 2026-09-10 (`HFILE* hInput, HFILE* hOutput, HPCON** phPC`, `private HPCON* _handle;`, `if (_handle != null)`). Verified 2026-09-11; nothing further.
 
 In `README-nuget.md`: the AN0100 section must show the idiom and the VB.NET rationale, must not recommend `ignore` for an interop project, and an AN0102 section must be added with the philosophy paragraph (friction, not sandbox) and the source/sink summary.
 
@@ -126,15 +126,22 @@ In `README-nuget.md`: the AN0100 section must show the idiom and the VB.NET rati
 
 A type `T` **is an untyped native pointer** if any of the following holds. This is a property of the **value's own type**, never of a class that happens to expose one (see "Classes" below).
 
-1. `T` is `System.IntPtr` or `System.UIntPtr` **and** `IsNativeIntegerType == false` (`nint`/`nuint` are integers; see Vocabulary). For metadata that lacks `NativeIntegerAttribute` the two are indistinguishable; treat as `IntPtr` (flagged).
+1. `T` is `System.IntPtr` or `System.UIntPtr`.
+   **Implementation finding (2026-09-11):** on .NET 7+ the compiler *unifies* `nint` with `System.IntPtr` (`RuntimeFeature.NumericIntPtr`) — same symbol, `IsNativeIntegerType == true` for both, no `NativeIntegerAttribute`. In **metadata** there is no way to tell `Marshal.AllocHGlobal(): IntPtr` from `Unsafe.Add(ref T, nint)`. Decision:
+   - For symbols declared in **our source**, the spelling is available: `nint`/`nuint` is an integer (clean under AN0102; AN0100 review-prompts it in P/Invoke), `IntPtr` is AN0100's token.
+   - For **metadata** symbols, a native-int-sized value crossing into code we cannot see is treated as a pointer and **fires**. `Unsafe.Add(ref x, (nint)1)` and `Math.Max(nint, nint)` fire; use the `int`/`long` overloads. This is friction on an ambiguous path, applied deliberately.
+   - AN0102-B never reports IntPtr-family types (spelled tokens are AN0100's; an inferred `var n = a + b` on nints is arithmetic; `var p = Marshal.AllocHGlobal(16)` is already reported at the call as a source).
 2. `T` is a pointer type whose ultimate pointee is `System.Void` (`void*`, `void**`, …).
 3. `T` is a class deriving from `System.Runtime.InteropServices.SafeHandle` or `System.Runtime.InteropServices.CriticalHandle` (walk `BaseType`). These classes *are* untyped pointers: `new SafeFileHandle(IntPtr, bool)` and `SetHandle(IntPtr)` let any integer become a handle.
-4. `T` is a **struct** with at least one instance field (any accessibility, read from metadata) whose type is an untyped native pointer under rules 1–4. Recursive through structs only. This is the "IntPtr in a costume" rule; it catches `struct HWND { IntPtr Value; }` in any assembly, `GCHandle`, `HandleRef`, `RuntimeTypeHandle`, `RuntimeMethodHandle`, `RuntimeFieldHandle` with no list.
+4. `T` is a **struct** that IS an untyped pointer with a name painted on ("IntPtr in a costume"), recursive through structs only:
+   - (a) an instance field (any accessibility) of untyped type — `struct HWND { IntPtr Value; }` in a real assembly; or
+   - (b) a **public instance property or field** of untyped type, or a **user-defined conversion** to/from one.
+   **Implementation finding (2026-09-11):** clause (b) is required because the compiler builds against *reference assemblies*, where GenAPI replaces private struct fields with `_dummyPrimitive`/`_dummy` — `GCHandle`'s `IntPtr _handle` is invisible at compile time, but its `explicit operator IntPtr` is not. `GCHandle` (conversion), `HandleRef` (`.Handle`), `RuntimeTypeHandle` (`.Value`) fall out of (b) with no list.
 5. Applied recursively through `IPointerTypeSymbol` (`SafeFileHandle*`), `IArrayTypeSymbol` (`IntPtr[]`), `Nullable<T>`, `Span<T>`/`ReadOnlySpan<T>`/`Memory<T>`/`ReadOnlyMemory<T>`, and `ref`/`in`/`out`.
 
 **Classes are never untyped native pointers by membership.** `Process`, `FileStream`, `Type`, `WaitHandle`, `Socket` are managed objects; holding a reference to one is not holding a pointer, and `new FileStream(path, …)` gives our code nothing to butcher. Their handle-carrying *members* are **sources** and **sinks** (below) and fire the moment our code touches them: `fs.SafeFileHandle`, `proc.Handle`, `new FileStream(SafeFileHandle, …)`.
 
-**`Marshal` and `GCHandle` are not special cases.** Every `Marshal` member that takes or returns an untyped native pointer fires by signature; `Marshal.GetLastWin32Error()` does not. `GCHandle` is a struct with an `IntPtr` field and fires by rule 4.
+**`Marshal` and `GCHandle` are not special cases.** Every `Marshal` member that takes or returns an untyped native pointer fires by signature; `Marshal.GetLastWin32Error()` does not. `GCHandle` is a costume struct (rule 4b: `explicit operator IntPtr`) and fires wherever it is declared, returned, or accepted.
 
 Implementation: memoize per compilation (`ConcurrentDictionary<ITypeSymbol, bool>` with `SymbolEqualityComparer.Default`), created in `RegisterCompilationStartAction`. Rule 4 walks metadata fields and must not be recomputed per reference.
 
@@ -161,14 +168,14 @@ This is symbol-based, so `var h = File.OpenHandle(path);` fires even though the 
 
 ### AN0102-B — Our code declares or names an untyped native pointer type (type-based)
 
-Same `IdentifierName`/`GenericName`/`QualifiedName`/`PredefinedType`/`PointerType`/`VarKeyword`-inferred hooks as AN0100. Flag any type reference (declaration of a field/local/parameter/return/type argument/base type/cast target/`typeof`/`is`/`as`, or an inferred `var`) whose type is an untyped native pointer under the definition. Report at the type syntax (or the `var` keyword).
+`IdentifierName` / `GenericName` hooks (a `QualifiedName`'s right-hand identifier is an `IdentifierName`, so `Microsoft.Win32.SafeHandles.SafeFileHandle f;` reports once, on `SafeFileHandle`). Flag any type reference (declaration of a field/local/parameter/return/type argument/base type/cast target/`typeof`/`is`/`as`, or an inferred `var`) whose type is an untyped native pointer under the definition. Report at the type syntax (or the `var` keyword). **Either side of a member access is skipped**: the name-part (`x.Foo`) is a member, and the expression-part of a static access (`GCHandle.Alloc`) is a lookup that holds no value — the member reference is judged by A.
 
-**Do not report AN0102-B where AN0100 already fires on the same token** (`IntPtr`, `UIntPtr`, `void*` spelled literally). AN0100 owns the syntax; AN0102-B owns everything AN0100 cannot see: `SafeFileHandle f;`, `var h = File.OpenHandle(…)`, `class Mine : SafeHandleZeroOrMinusOneIsInvalid`, `HWND_COSTUME w;` from another assembly, `GCHandle g;`.
+**Do not report AN0102-B on IntPtr-family types at all** — spelled `IntPtr`/`UIntPtr`/`void*` tokens are AN0100's; `nint`/`nuint` are integers; and an inferred `var` of that type is either arithmetic or already reported at the call (see Definition rule 1). AN0102-B owns everything AN0100 cannot see: `SafeFileHandle f;`, `var h = File.OpenHandle(…)`, `class Mine : SafeHandleZeroOrMinusOneIsInvalid`, `HWND_COSTUME w;` from another assembly, `GCHandle g;`, `var g = GCHandle.Alloc(o)`.
 
 Known BCL surface this catches (the test matrix, not an allowlist): `File.OpenHandle`, `RandomAccess.*`, `FileStream.SafeFileHandle`, `FileStream(SafeFileHandle, …)` ctors, `Process.Handle`/`MainWindowHandle`/`ProcessorAffinity`, `WaitHandle.SafeWaitHandle`/`Handle`, `Socket.Handle`, `Marshal.*` (pointer-carrying members), `GCHandle.*`, `SafeHandle.DangerousGetHandle`, `NativeLibrary.Load`/`GetExport`, `Type.TypeHandle`/`RuntimeTypeHandle.Value`, `MethodBase.MethodHandle`, `NativeMemory.*`, `Span<T>(void*, int)`, `Buffer.MemoryCopy`, `Unsafe.AsPointer`/`Unsafe.Read<T>(void*)`/`Unsafe.CopyBlock(void*, …)`, `Delegate.Method`→ no (`MethodInfo` is a class; only `.MethodHandle` fires).
 
 ### Explicitly NOT flagged
-- `nint`/`nuint` anywhere as *integers* — outside P/Invoke unconditionally; inside P/Invoke for `SIZE_T`/`DWORD_PTR`/`ULONG_PTR`/bitfields (AN0100 review-prompt warning only). BCL callees with `nint` parameters (`Unsafe.Add(ref T, nint)`, `Math.Max(nint, nint)`) are clean under AN0102-A via `IsNativeIntegerType`.
+- `nint`/`nuint` as *integers* in **our own** code — locals, arithmetic, our own members spelled `nint` (outside P/Invoke unconditionally; inside P/Invoke AN0100 review-prompts). **Not** BCL callees with `nint` parameters — see Definition rule 1: on .NET 7+ metadata cannot distinguish them from `IntPtr`, and they fire.
 - `Span<byte>`, `ReadOnlySpan<T>`, `Memory<T>`, `MemoryMarshal.Cast<TFrom,TTo>`, `MemoryMarshal.CreateSpan(ref T, int)` — typed, bounds-checked.
 - `T*` where `T` is a real struct/primitive or an empty marker struct — this **is** the idiom. `T**`, `T***` likewise.
 - `readonly struct HFILE_HANDLE { HFILE* Value; }` — a struct whose pointer payload is **typed**; the permitted generic/async wrapper.
@@ -245,11 +252,11 @@ Message construction rules:
 | 1 | `var h = File.OpenHandle(p, FileMode.Open);` | AN0102-A1 on invocation (returns SafeFileHandle) + AN0102-B on `var` |
 | 2 | `RandomAccess.Read(h, span, 0);` | AN0102-A2 (param SafeFileHandle) |
 | 3 | `SafeFileHandle f;` (declaration) | AN0102-B, exactly one diagnostic |
-| 4 | `class MyHandle : SafeHandleZeroOrMinusOneIsInvalid` | AN0102-B on base type |
+| 4 | `class MyHandle : SafeHandleZeroOrMinusOneIsInvalid` with `: base(true)` | AN0102-B on base type, exactly one (`base(...)` constructs nothing new) |
 | 5 | `fs.SafeFileHandle` (property read) | AN0102-A1; **`fs` / `FileStream` itself clean** |
-| 6 | `Marshal.AllocHGlobal(16)` | AN0102-A1 (returns IntPtr) |
-| 7 | `GCHandle.Alloc(o)` | AN0102-A1 (returns GCHandle, a costume struct by rule 4) |
-| 8 | `h.DangerousGetHandle()` | AN0102-A1 + A3 → **one** diagnostic (dedupe per location) |
+| 6 | `var p = Marshal.AllocHGlobal(16)` | AN0102-A1 on the call (returns IntPtr); **no** B on `var` (IntPtr-family) |
+| 7 | `var g = GCHandle.Alloc(o)` | AN0102-A1 on the call (returns GCHandle, costume by rule 4b) + B on `var`; **no** B on the `GCHandle` in `GCHandle.Alloc` (static-access lookup) |
+| 8 | `var p = h.DangerousGetHandle()` | B on `SafeFileHandle h` param + AN0102-A1 on the call → **one** on the call (source wins over A3); no B on `var` |
 | 9 | `Action<IntPtr> a = Foo;` (delegate creation) | AN0100 on `IntPtr` token; AN0102-A on MethodReference (Foo's parameter). Two IDs, two locations — acceptable |
 | 10 | `void* p = null;` | AN0100 (void* case), **no** AN0102-B (AN0100 owns the token) |
 | 11 | `static extern void F(void* p);` | AN0100 |
@@ -258,14 +265,15 @@ Message construction rules:
 | 14 | `(HWND*)null`, `(HFILE*)(-1)` | **clean** |
 | 15 | `MemoryMarshal.Cast<byte, ushort>(span)`, `MemoryMarshal.CreateSpan(ref *p, n)` | **clean** |
 | 16 | `new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 0)` | **clean** |
-| 17 | `nint n = 5; n += 2;` outside P/Invoke; `Unsafe.Add(ref x, (nint)1)` | **clean** |
+| 17 | `nint n = 5; n += 2;`, our own `static nint Twice(nint x)`, `Unsafe.Add(ref x, 1)` (int overload) | **clean** |
+| 17b | `Unsafe.Add(ref x, (nint)1)`, `Math.Max(n, (nint)2)` | **AN0102-A2** — BCL `nint` is `IntPtr` in .NET 7+ metadata (Definition rule 1); use the `int` overloads |
 | 18 | `new Span<byte>(bytePtr, 16)` | AN0102-A2 (void* parameter) |
 | 19 | `Buffer.MemoryCopy(src, dst, 16, 16)` with `byte*` args | AN0102-A2 |
 | 20 | `NativeMemory.Alloc(16)` | AN0102-A1 (returns void*) |
 | 21 | `Marshal.GetLastWin32Error()` | **clean** |
 | 22 | `typeof(Foo)` / `proc.Start()` / `Process.GetCurrentProcess()` | **clean** |
-| 23 | `typeof(Foo).TypeHandle` | AN0102-A1 (RuntimeTypeHandle is a costume struct) |
-| 24 | `proc.Handle` | AN0102-A1 |
+| 23 | `var h = typeof(Foo).TypeHandle` | AN0102-A1 (RuntimeTypeHandle is a costume struct via public `Value: IntPtr`, rule 4b) + B on `var` |
+| 24 | `var h = proc.Handle` | AN0102-A1 on the property read; no B on `var` (IntPtr-family) |
 | 25 | `readonly unsafe struct HFILE_HANDLE { public HFILE* Value; }` + `Dictionary<int, HFILE_HANDLE>` | **clean** |
 | 26 | `delegate* unmanaged<HWND*, int, bool> cb` | **clean** |
 | 27 | `ProhibitReachableUntypedNativePointers=ignore` with case 1 | no diagnostic |

@@ -16,28 +16,49 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
         private const string helpLinkUrl =
             "https://github.com/ArtificialNecessity/AN_CodeAnalyzers/blob/main/docs/TypeSafePInvoke.md";
 
-        // Rule for IntPtr/UIntPtr used anywhere
+        // Every message in the AN0100/AN0102 family ends with the same idiom block so it is
+        // impossible to read the error and not know what to type instead.
+        private const string idiomHandles =
+            "\n        Handles are EMPTY unsafe marker structs and the pointer IS the handle:" +
+            "\n            unsafe struct HWND { }        HWND* hWnd;        (HWND*)null        HWND** phWnd (out-param)" +
+            "\n        Pointers name their pointee:  byte* buffer;  OVERLAPPED* ov;   Sizes/bitfields are integers:  nuint cbSize;" +
+            "\n        Never IntPtr, never void*, never SafeHandle.   See: " + helpLinkUrl;
+
+        // Rule for IntPtr/UIntPtr used anywhere (untyped native pointer, spelled)
         private static readonly DiagnosticDescriptor intPtrRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use raw IntPtr/UIntPtr",
-            "Do not use '{0}'. IntPtr and UIntPtr are untyped native pointers: the compiler cannot tell an HWND from an HFILE from a heap address. Use typed structs for handles and unsafe T* for pointers.",
+            "Do not use '{0}' \u2014 it throws away the type at the exact boundary where the type matters: the compiler cannot tell an HWND from an HFILE from a heap address." + idiomHandles,
             category,
             DiagnosticSeverity.Warning, // default severity; overridden by config
             isEnabledByDefault: true,
             helpLinkUri: helpLinkUrl);
 
-        // Rule for nint/nuint used in P/Invoke declarations
+        // Rule for void* used anywhere (IntPtr with a different spelling)
+        private static readonly DiagnosticDescriptor voidPointerRule = new DiagnosticDescriptor(
+            DiagnosticId,
+            "Do not use void*",
+            "Do not use '{0}' \u2014 it is IntPtr with a different spelling: \"points at something\" and refuses to say what." +
+            "\n        Name the pointee:  byte* buffer;  OVERLAPPED* ov;  HPCON** phPC;   Reserved-must-be-NULL:  unsafe struct RESERVED_MUST_BE_NULL { }  \u2192  RESERVED_MUST_BE_NULL* p" +
+            "\n        Never IntPtr, never void*, never SafeHandle.   See: " + helpLinkUrl,
+            category,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: helpLinkUrl);
+
+        // Rule for nint/nuint used in P/Invoke declarations (review prompt: integer, or handle in disguise?)
         private static readonly DiagnosticDescriptor nintInPInvokeRule = new DiagnosticDescriptor(
             DiagnosticId,
             "Do not use nint/nuint in P/Invoke declarations",
-            "Do not use '{0}' in P/Invoke declarations. Use typed structs for handles and unsafe T* for pointers.",
+            "'{0}' in P/Invoke: is this an INTEGER (SIZE_T / DWORD_PTR / flags \u2192 {0} is correct, leave it) or a HANDLE/POINTER the native side dereferences or closes (\u2192 write T*: unsafe struct HPCON { }  HPCON* h)?" +
+            "\n        See: " + helpLinkUrl,
             category,
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
             helpLinkUri: helpLinkUrl);
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-            ImmutableArray.Create(intPtrRule, nintInPInvokeRule);
+            ImmutableArray.Create(intPtrRule, voidPointerRule, nintInPInvokeRule);
 
         public override void Initialize(AnalysisContext analysisContext)
         {
@@ -48,7 +69,8 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
             analysisContext.RegisterSyntaxNodeAction(analyzeTypeSyntax,
                 SyntaxKind.IdentifierName,
                 SyntaxKind.PredefinedType,
-                SyntaxKind.CastExpression);
+                SyntaxKind.CastExpression,
+                SyntaxKind.PointerType);
         }
 
         private void analyzeTypeSyntax(SyntaxNodeAnalysisContext nodeContext)
@@ -74,7 +96,26 @@ namespace AN.CodeAnalyzers.RequireTypedPointersNotIntPtr
                 case CastExpressionSyntax castExpressionSyntax:
                     analyzeCastExpression(nodeContext, castExpressionSyntax, effectiveSeverity);
                     break;
+
+                case PointerTypeSyntax pointerTypeSyntax:
+                    analyzePointerType(nodeContext, pointerTypeSyntax, effectiveSeverity);
+                    break;
             }
+        }
+
+        private void analyzePointerType(
+            SyntaxNodeAnalysisContext nodeContext,
+            PointerTypeSyntax pointerTypeSyntax,
+            DiagnosticSeverity effectiveSeverity)
+        {
+            // void* is IntPtr with a different spelling. Only the innermost `void*` fires, so `void**`
+            // produces exactly one diagnostic (the outer PointerType's element is `void*`, not `void`).
+            if (pointerTypeSyntax.ElementType is not PredefinedTypeSyntax elementPredefinedType ||
+                !elementPredefinedType.Keyword.IsKind(SyntaxKind.VoidKeyword))
+                return;
+
+            reportDiagnostic(nodeContext, pointerTypeSyntax.GetLocation(),
+                voidPointerRule, "void*", effectiveSeverity);
         }
 
         private void analyzeIdentifierName(

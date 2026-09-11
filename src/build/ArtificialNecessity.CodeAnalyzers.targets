@@ -6,6 +6,8 @@
     <CompilerVisibleProperty Include="EnforceExplicitEnumValues" />
     <!-- RequireTypedPointersNotIntPtr (AN0100) -->
     <CompilerVisibleProperty Include="RequireTypedPointersNotIntPtr" />
+    <!-- ProhibitReachableUntypedNativePointers (AN0102) -->
+    <CompilerVisibleProperty Include="ProhibitReachableUntypedNativePointers" />
     <!-- CallersMustNameAllParameters (AN0103) -->
     <CompilerVisibleProperty Include="RequireNamedArgumentsEverywhereLikeObjectiveC" />
     <!-- EnforceNamingConventions (AN0200) -->
