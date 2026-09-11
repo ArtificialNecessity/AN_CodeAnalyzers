@@ -66,11 +66,12 @@ The `unsafe` keyword is C#'s mechanism for marking code that can do these things
 ## Examples
 
 ```csharp
-// AN0101 — not marked unsafe
+// AN0101 — not marked unsafe (and AN0100 — IntPtr)
 [DllImport("kernel32.dll")]
 static extern bool CloseHandle(IntPtr hObject);
 
-// Compliant — marked unsafe
+// Compliant — marked unsafe; HANDLE is an EMPTY marker struct and the pointer IS the handle
+unsafe struct HANDLE { }
 [DllImport("kernel32.dll")]
 static extern unsafe bool CloseHandle(HANDLE* hObject);
 
@@ -78,18 +79,24 @@ static extern unsafe bool CloseHandle(HANDLE* hObject);
 static class NativeMethods
 {
     [DllImport("kernel32.dll")]
-    static extern bool CloseHandle(HANDLE handle);
+    static extern bool CloseHandle(HANDLE* handle);
 }
 
 // Compliant — all members considered unsafe
 static unsafe class NativeMethods
 {
     [DllImport("kernel32.dll")]
-    static extern bool CloseHandle(HANDLE handle);
+    static extern bool CloseHandle(HANDLE* handle);
 }
 
 
-//// CRITICAL TO HELP USERS UNDERSTAND HOW TO USE THIS.....
+//// CRITICAL TO HELP USERS UNDERSTAND HOW TO USE THIS — this is the example people copy; it must be exactly right.
+//// No IntPtr. No void*. No SafeHandle (SafeHandle is IntPtr + a finalizer — lifetime safety, zero type safety).
+//// Handles are EMPTY unsafe marker structs; the pointer IS the handle; out-params are T**.
+
+unsafe struct HFILE { }
+unsafe struct HPCON { }
+[StructLayout(LayoutKind.Sequential)] struct COORD { public short X, Y; }
 
 // The interop boundary — unsafe class, safe public API
 public unsafe class PseudoConsole : IDisposable
@@ -97,22 +104,22 @@ public unsafe class PseudoConsole : IDisposable
     // P/Invoke — unsafe, compiler enforced
     [DllImport("kernel32.dll")]
     private static extern int CreatePseudoConsole(
-        COORD size, SafeFileHandle hInput, SafeFileHandle hOutput,
-        uint dwFlags, out HPCON phPC);
+        COORD size, HFILE* hInput, HFILE* hOutput,
+        uint dwFlags, HPCON** phPC);                 // pointer-to-handle: HPCON**, never out IntPtr
 
     [DllImport("kernel32.dll")]
-    private static extern int ClosePseudoConsole(HPCON hPC);
+    private static extern int ClosePseudoConsole(HPCON* hPC);
 
-    private HPCON _handle;
+    private HPCON* _handle;                          // null = no handle. Never IntPtr.Zero, never default(HPCON)
 
     // Safe public method — callers don't need unsafe context.
     // This is the boundary. You chose it. It's visible. It's auditable.
     public void Close()
     {
-        if (_handle.IsValid)
+        if (_handle != null)
         {
             ClosePseudoConsole(_handle);
-            _handle = default;
+            _handle = null;
         }
     }
 }
@@ -125,5 +132,6 @@ console.Close();  // safe call, no unsafe context needed
 
 ## Related
 
-- **AN0100: RequireTypedPointersNotIntPtr** — companion rule that eliminates `IntPtr` from P/Invoke signatures
+- **AN0100: RequireTypedPointersNotIntPtr** — companion rule that eliminates `IntPtr` and `void*` from P/Invoke signatures
+- **AN0102: ProhibitErasedHandlesAndPointers** — rejects BCL types that *wrap* an `IntPtr` (`SafeHandle` family, `Marshal`, `GCHandle`) and any API whose signature carries one
 - See [docs/TypeSafePInvoke.md](https://github.com/ArtificialNecessity/AN_CodeAnalyzers/blob/main/docs/TypeSafePInvoke.md) for the full type-safe P/Invoke pattern

@@ -32,9 +32,21 @@ Roslyn code analyzers and MSBuild tools for preventing silent binary compatibili
 
 ### AN0100: Require typed pointers, not IntPtr
 
-`IntPtr` is not safe. It erases type information at the exact boundary where it matters most — the compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works.
+`IntPtr` is not safe. It erases type information at the exact boundary where it matters most — the compiler cannot distinguish an `HWND` from an `HPCON` from a raw memory address from a stale dangling pointer. You can assign a window handle to a console handle, increment a handle as if it were a pointer, or pass a handle value where a pointer-to-handle was expected. All of this compiles. None of it works. `void*` is the same mistake with a different spelling, and `SafeHandle` is an `IntPtr` with a finalizer — lifetime safety, zero type safety.
 
-This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, and `nint`/`nuint` in P/Invoke declarations. There are no exceptions. Use typed structs for handles and `unsafe T*` for pointers.
+This analyzer flags **any** use of `IntPtr`, `UIntPtr` or `void*` anywhere in user code, and warns on `nint`/`nuint` in P/Invoke declarations (correct for `SIZE_T`/`DWORD_PTR` integers, wrong for handles). There are no exceptions.
+
+**The idiom** — handles are *empty* `unsafe` marker structs and the pointer *is* the handle:
+
+```csharp
+unsafe struct HWND  { }                       // no payload — the TYPE is the information
+unsafe struct HFILE { }                       // HWND* and HFILE* are different types: cross-assignment and arithmetic are compile errors
+
+[DllImport("user32")]   static extern unsafe bool SetForegroundWindow(HWND* hWnd);
+[DllImport("kernel32")] static extern unsafe bool ReadFile(HFILE* hFile, byte* buffer, uint bytesToRead, uint* bytesRead, OVERLAPPED* overlapped);
+[DllImport("kernel32")] static extern unsafe int  CreatePseudoConsole(COORD size, HFILE* hIn, HFILE* hOut, uint flags, HPCON** phPC);   // out-param = T**
+// null handle: (HWND*)null — never IntPtr.Zero, never default(HWND). Sizes/bitfields: nuint.
+```
 
 **Configuration** via MSBuild property:
 
@@ -50,7 +62,7 @@ This analyzer flags **any** use of `IntPtr` or `UIntPtr` anywhere in user code, 
 | `disallow` | Error — build fails on any IntPtr usage       |
 | `ignore`   | Disabled                                       |
 
-**Recommended:** Isolate native interop type definitions in a small dedicated project with `<RequireTypedPointersNotIntPtr>ignore</RequireTypedPointersNotIntPtr>`, and set `disallow` or `warn` in all other projects.
+**Recommended:** `disallow` everywhere, *including* the interop project — the idiom contains no `IntPtr` and no `void*`, so the interop project builds clean too. `ignore` is a rollout value for unconverted projects, never a destination. Pair with **AN0102** so BCL wrappers around `IntPtr` (`SafeFileHandle`, `Marshal`, `GCHandle`, `File.OpenHandle`) are rejected as well.
 
 ### AN0103: Callers must name all parameters
 
